@@ -84,5 +84,6 @@ public class CameraHolderController : MonoBehaviour
     public void GetOutHead()
     {
         transform.SetParent(null);
+        transform.localRotation = Quaternion.Euler(0, movement.transform.rotation.eulerAngles.y, 0);
     }
 }

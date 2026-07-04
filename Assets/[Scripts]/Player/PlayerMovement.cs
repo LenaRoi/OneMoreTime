@@ -125,5 +125,41 @@ public class PlayerMovement : MonoBehaviour
                 });
             });
         }
+
+        else if (obstacleIndex == 4)
+        {
+            GameObject head = cameraHolderController.playerHead;
+            Vector3 localPos = head.transform.localPosition;
+            head.transform.DOLocalMoveZ(localPos.z - 0.2f, 0.1f);
+            canLook = false;
+            canMove = false;
+            animator.SetTrigger("Climb");
+            transform.DOMove(currentObstacle.entryPos.position, 0.63f).SetEase(Ease.Linear).OnComplete(() =>
+            {
+                transform.DOMove(currentObstacle.exitPos.position, 0.6f).SetEase(Ease.Linear).OnComplete(() =>
+                {
+                    head.transform.DOLocalMoveZ(localPos.z, 0.1f);
+                    animator.SetFloat("MoveY", 0);
+                    animator.SetFloat("MoveX", 0);
+                    canLook = true;
+                    canMove = true;
+                });
+            });
+        }
+        else if (obstacleIndex == 5)
+        {
+            canMove = false;
+            transform.DOMove(currentObstacle.entryPos.position, dist / 6).SetEase(Ease.InQuad).OnComplete(() =>
+            {
+                animator.SetTrigger("WallWalkSide");
+                transform.DOMove(currentObstacle.exitPos.position, 1f).SetEase(Ease.Linear).OnComplete(() =>
+                {
+                    animator.SetFloat("MoveY", 0);
+                    animator.SetFloat("MoveX", 0);
+                    canLook = true;
+                    canMove = true;
+                });
+            });
+        }
     }
 }
