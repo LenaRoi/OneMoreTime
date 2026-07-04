@@ -1,16 +1,31 @@
 using UnityEngine;
 
 /// <summary>
-/// Neon light that pulses to the beat and randomly changes color, using the same
-/// shared audio spectrum as the equalizers (AudioSpectrumProvider). Attach to a
-/// Light (Point/Spot). Intensity spikes on each detected beat and eases back; the
-/// color jumps to a new random neon hue (on beat or on a timer) and blends there.
-/// Place several around the scene for a rhythmic neon wash.
+/// Neon light that pulses to the beat and changes to a random neon color that is
+/// SHARED across every RhythmLight (via RhythmSync), so a corridor full of these
+/// all show the same color and change together instead of a rainbow mess.
+/// Attach to a Light (Point/Spot). Uses the shared audio (AudioSpectrumProvider).
 /// </summary>
 [RequireComponent(typeof(Light))]
 public class RhythmLight : MonoBehaviour
 {
-    public enum ColorChange { OnBeat, Timed }
+    public enum LightMode { SyncedColor, FlowingWave }
+
+    [Header("Mod")]
+    [Tooltip("SyncedColor: tüm ışıklar aynı renk. FlowingWave: renk koridor boyunca akar.")]
+    public LightMode mode = LightMode.FlowingWave;
+
+    [Header("Başlangıç Rengi")]
+    [Tooltip("Başlangıç/temel neon renk. Dalga bu tondan başlar.")]
+    [ColorUsage(false, true)] public Color startColor = new Color(0.6f, 0.1f, 1f);
+
+    [Header("Akan Dalga (FlowingWave)")]
+    [Tooltip("Koridor yönü (rengin aktığı eksen). Koridor X'te ise (1,0,0), Z'de ise (0,0,1).")]
+    public Vector3 waveAxis = Vector3.forward;
+    [Tooltip("Dalga sıklığı: dünya biriminde ton kayması. Yüksek = daha sık renk değişimi.")]
+    public float waveDensity = 0.06f;
+    [Tooltip("Dalganın akma hızı (ton/sn).")]
+    public float flowSpeed = 0.15f;
 
     [Header("Parlaklık (Nabız)")]
     [Tooltip("Sürekli taban parlaklık.")]
@@ -22,19 +37,19 @@ public class RhythmLight : MonoBehaviour
     [Tooltip("Bas enerjisine göre hafif sürekli titreşim.")]
     [Range(0f, 3f)] public float continuousResponse = 0.6f;
 
-    [Header("Renk (Neon, rastgele)")]
+    [Header("Renk (Neon — TÜM ışıklarda ortak/senkron)")]
     [Tooltip("Renk ne zaman değişsin: her beat'te ya da zamanlayıcıyla.")]
-    public ColorChange colorChange = ColorChange.OnBeat;
+    public RhythmSync.ColorMode colorChange = RhythmSync.ColorMode.OnBeat;
     [Tooltip("Timed modda kaç saniyede bir renk değişsin.")]
     public float colorInterval = 1.5f;
     [Tooltip("Renk geçiş hızı (yüksek = ani, düşük = yumuşak).")]
     [Range(0.5f, 20f)] public float colorLerpSpeed = 6f;
     [Tooltip("Neon doygunluğu.")]
     [Range(0.5f, 1f)] public float saturation = 0.9f;
-    [Tooltip("İzin verilen renk tonları (0-1 hue). Boşsa tüm gökkuşağı.")]
+    [Tooltip("İzin verilen renk tonları (0-1 hue). (0,1) = tüm gökkuşağı.")]
     public Vector2 hueRange = new Vector2(0f, 1f);
 
-    [Header("Beat Algılama")]
+    [Header("Beat Algılama (ortak)")]
     [Range(1.05f, 3f)] public float beatThreshold = 1.4f;
     public float minBeatInterval = 0.12f;
 
@@ -43,21 +58,11 @@ public class RhythmLight : MonoBehaviour
     public float maxVisibleDistance = 45f;
 
     private Light lite;
-    private float pulse;
-    private float bassLevel;
-    private float energyAvg = 0.0001f;
-    private float beatTimer;
-    private float colorTimer;
-    private Color targetColor;
     private Camera cam;
 
     void Start()
     {
         lite = GetComponent<Light>();
-        // Farklı ışıklar farklı başlasın diye rastgele faz
-        targetColor = RandomNeon();
-        lite.color = RandomNeon();
-        colorTimer = Random.value * colorInterval;
     }
 
     void Update()
@@ -74,46 +79,37 @@ public class RhythmLight : MonoBehaviour
             if (!lite.enabled) lite.enabled = true;
         }
 
-        DetectBeat();
+        // Ortak senkronu besle ve güncelle (kare başına bir kez çalışır)
+        Color.RGBToHSV(startColor, out float startHue, out _, out _);
+        RhythmSync.StartHue = startHue;
+        RhythmSync.FlowSpeed = flowSpeed;
+        RhythmSync.BeatThreshold = beatThreshold;
+        RhythmSync.MinBeatInterval = minBeatInterval;
+        RhythmSync.PulseDecay = pulseDecay;
+        RhythmSync.Mode = colorChange;
+        RhythmSync.ColorInterval = colorInterval;
+        RhythmSync.Saturation = saturation;
+        RhythmSync.HueRange = hueRange;
+        RhythmSync.Tick();
 
-        // Nabız söner; bas seviyesi yumuşak takip edilir
-        pulse = Mathf.Lerp(pulse, 0f, Time.deltaTime * pulseDecay);
-        lite.intensity = baseIntensity + bassLevel * continuousResponse + pulse * beatIntensity;
+        // Ortak nabız/bas ile parlaklık
+        lite.intensity = baseIntensity + RhythmSync.BassLevel * continuousResponse + RhythmSync.Pulse * beatIntensity;
 
-        // Renk zamanlayıcısı (Timed mod)
-        if (colorChange == ColorChange.Timed)
+        // Hedef renk: moda göre
+        Color target;
+        if (mode == LightMode.FlowingWave)
         {
-            colorTimer -= Time.deltaTime;
-            if (colorTimer <= 0f) { targetColor = RandomNeon(); colorTimer = colorInterval; }
+            // Bu ışığın koridor üzerindeki konumu → ton kayması → akan dalga
+            Vector3 axis = waveAxis.sqrMagnitude > 1e-6f ? waveAxis.normalized : Vector3.forward;
+            float spatial = Vector3.Dot(transform.position, axis) * waveDensity;
+            float hue = RhythmSync.StartHue + RhythmSync.HuePhase + spatial;
+            target = Color.HSVToRGB(Mathf.Repeat(hue, 1f), saturation, 1f);
+        }
+        else
+        {
+            target = RhythmSync.TargetColor;   // tüm ışıklar aynı renk
         }
 
-        lite.color = Color.Lerp(lite.color, targetColor, Time.deltaTime * colorLerpSpeed);
-    }
-
-    void DetectBeat()
-    {
-        float[] spec = AudioSpectrumProvider.GetShared();
-        int bassBins = Mathf.Max(4, spec.Length / 32);
-        float bass = 0f;
-        for (int i = 0; i < bassBins; i++) bass += spec[i];
-
-        // Görsel için normalize edilmiş bas seviyesi
-        bassLevel = Mathf.Lerp(bassLevel, Mathf.Clamp01(bass * 60f), Time.deltaTime * 12f);
-
-        energyAvg = Mathf.Lerp(energyAvg, bass, Time.deltaTime * 3f);
-        beatTimer += Time.deltaTime;
-
-        if (bass > energyAvg * beatThreshold && beatTimer >= minBeatInterval && bass > 0.0002f)
-        {
-            beatTimer = 0f;
-            pulse = 1f;
-            if (colorChange == ColorChange.OnBeat) targetColor = RandomNeon();
-        }
-    }
-
-    Color RandomNeon()
-    {
-        float h = Random.Range(hueRange.x, hueRange.y);
-        return Color.HSVToRGB(Mathf.Repeat(h, 1f), saturation, 1f);
+        lite.color = Color.Lerp(lite.color, target, Time.deltaTime * colorLerpSpeed);
     }
 }
