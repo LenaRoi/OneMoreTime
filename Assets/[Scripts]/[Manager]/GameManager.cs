@@ -6,9 +6,9 @@ public class GameManager : MonoBehaviour
     #region Singleton
     private void Awake()
     {
-        if (instance = null) instance = this;
+        if (instance == null) instance = this;
     }
     #endregion
 
-    public Material beatMaterial;
+    public bool isResetting = false;
 }

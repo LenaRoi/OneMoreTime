@@ -18,7 +18,6 @@ public class CameraHolderController : MonoBehaviour
 
     public GameObject playerHead;
     public LayerMask obstacleLayer;
-
     void Start()
     {
         // Fare imlecini ekrana kilitler ve gizler
@@ -38,13 +37,16 @@ public class CameraHolderController : MonoBehaviour
 
     void LateUpdate()
     {
-        Vector3 targetPosition = playerHead.transform.position;
+        if (!GameManager.instance.isResetting)
+        {
+            Vector3 targetPosition = playerHead.transform.position;
 
-        transform.position = Vector3.Lerp(
-            transform.position,
-            targetPosition,
-            100 * Time.deltaTime
-        );
+            transform.position = Vector3.Lerp(
+                transform.position,
+                targetPosition,
+                100 * Time.deltaTime
+            );
+        }
     }
 
     public void Look()

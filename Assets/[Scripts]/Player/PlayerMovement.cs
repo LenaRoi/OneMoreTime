@@ -1,4 +1,5 @@
 using DG.Tweening;
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
@@ -26,6 +27,10 @@ public class PlayerMovement : MonoBehaviour
 
     public Animator animator;
 
+    public CameraRewind rewing;
+
+    public SkinnedMeshRenderer bodysmr;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -34,6 +39,15 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         if (canMove) Move();
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            GameManager.instance.isResetting = true;
+            canMove = false;
+            canLook = false;
+            bodysmr.enabled = false;
+            rewing.StartRewind();
+        }
     }
 
     public void Move()
@@ -75,7 +89,6 @@ public class PlayerMovement : MonoBehaviour
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
     }
-
     public void Jump()
     {
         velocity = Vector3.zero;
