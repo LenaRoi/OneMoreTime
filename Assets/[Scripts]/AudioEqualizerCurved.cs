@@ -60,6 +60,10 @@ public class AudioEqualizerCurved : MonoBehaviour
     public bool showUnlit = false;
     [Range(0f, 0.4f)] public float unlitDim = 0.12f;
 
+    [Header("Performans")]
+    [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez ve çizilmez (uzaktakiler FPS düşürmesin). 0 = hep aktif.")]
+    public float maxVisibleDistance = 40f;
+
     private AudioSource audioSource;
     private float[] spectrum;
     private float[] level;
@@ -72,6 +76,9 @@ public class AudioEqualizerCurved : MonoBehaviour
     private Material[] barMaterials;
     private Transform grid;
     private int builtBars, builtSegments;
+    private int[] prevLit;      // her sütunun bir önceki yanan blok sayısı (delta güncelleme)
+    private Camera cam;
+    private bool culled;
 
     // eğri örnekleme tamponları
     private readonly List<Vector3> _samples = new List<Vector3>();
@@ -124,6 +131,8 @@ public class AudioEqualizerCurved : MonoBehaviour
         blocks = new MeshRenderer[bars, segments];
         barColors = new Color[bars];
         barMaterials = new Material[bars];
+        prevLit = new int[bars];
+        if (mpb == null) mpb = new MaterialPropertyBlock();
 
         SampleCurve();
 
@@ -160,6 +169,9 @@ public class AudioEqualizerCurved : MonoBehaviour
             if (normal.sqrMagnitude < 1e-6f) normal = Vector3.forward * dir;
             Quaternion rot = Quaternion.LookRotation(normal, up);
 
+            Color cLit = barColors[b] * brightness;
+            Color cDim = barColors[b] * unlitDim;
+
             for (int s = 0; s < segments; s++)
             {
                 float uy = bottom + (s + 0.5f) * segPitch;
@@ -176,8 +188,13 @@ public class AudioEqualizerCurved : MonoBehaviour
                 mr.sharedMaterial = barMaterials[b];
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 mr.receiveShadows = false;
+                // Başlangıç: sönük. Yanan renk sabit olduğundan bir kez ayarlanır;
+                // çalışırken sadece açık/kapalı değişir (her kare SetPropertyBlock yok).
+                if (showUnlit) { mpb.SetColor(_colorProp, cDim); mr.SetPropertyBlock(mpb); }
+                else { mpb.SetColor(_colorProp, cLit); mr.SetPropertyBlock(mpb); mr.enabled = false; }
                 blocks[b, s] = mr;
             }
+            prevLit[b] = 0;
         }
 
         builtBars = bars;
@@ -256,6 +273,22 @@ public class AudioEqualizerCurved : MonoBehaviour
             if (blocks == null) return;
         }
 
+        // Uzaktaki equalizer'ları güncelleme/çizme (FPS için)
+        if (maxVisibleDistance > 0f)
+        {
+            if (cam == null) cam = Camera.main;
+            if (cam != null)
+            {
+                float md = maxVisibleDistance;
+                if ((cam.transform.position - transform.position).sqrMagnitude > md * md)
+                {
+                    if (!culled) { culled = true; if (grid) grid.gameObject.SetActive(false); }
+                    return;
+                }
+                if (culled) { culled = false; if (grid) grid.gameObject.SetActive(true); }
+            }
+        }
+
         float[] spec = GetSpectrum();
         float fall = Mathf.Exp(-Time.deltaTime * balanceFalloff);
 
@@ -285,18 +318,32 @@ public class AudioEqualizerCurved : MonoBehaviour
             float rate = (target > level[b] ? attack : decay) * Time.deltaTime;
             level[b] = Mathf.Lerp(level[b], target, rate);
 
+            // Sadece DURUMU DEĞİŞEN blokları güncelle (her kare hepsini değil)
             int lit = Mathf.RoundToInt(level[b] * segments);
-            Color c = barColors[b] * brightness;
-            Color dim = barColors[b] * unlitDim;
-
-            for (int s = 0; s < segments; s++)
+            int prev = prevLit[b];
+            if (lit != prev)
             {
-                var mr = blocks[b, s];
-                bool on = s < lit;
-                if (!on && !showUnlit) { mr.enabled = false; continue; }
-                mr.enabled = true;
-                mpb.SetColor(_colorProp, on ? c : dim);
-                mr.SetPropertyBlock(mpb);
+                if (lit > prev)
+                {
+                    Color c = barColors[b] * brightness;
+                    for (int s = prev; s < lit; s++)
+                    {
+                        var mr = blocks[b, s];
+                        if (showUnlit) { mpb.SetColor(_colorProp, c); mr.SetPropertyBlock(mpb); }
+                        else mr.enabled = true;
+                    }
+                }
+                else
+                {
+                    Color dim = barColors[b] * unlitDim;
+                    for (int s = lit; s < prev; s++)
+                    {
+                        var mr = blocks[b, s];
+                        if (showUnlit) { mpb.SetColor(_colorProp, dim); mr.SetPropertyBlock(mpb); }
+                        else mr.enabled = false;
+                    }
+                }
+                prevLit[b] = lit;
             }
         }
     }
