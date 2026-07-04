@@ -130,7 +130,7 @@ public class PlayerMovement : MonoBehaviour
             transform.DOMove(currentObstacle.entryPos.position, dist / 6).SetEase(Ease.InQuad).OnComplete(() =>
             {
                 animator.SetTrigger("BigJump");
-                transform.DOMove(currentObstacle.exitPos.position, 2.2f).SetEase(Ease.OutSine).OnComplete(() =>
+                transform.DOMove(currentObstacle.exitPos.position, 1.65f).SetEase(Ease.OutSine).OnComplete(() =>
                 {
                     cameraHolderController.GetOutHead();
                     canLook = true;
