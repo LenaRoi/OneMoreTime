@@ -82,7 +82,8 @@ public class PlayerMovement : MonoBehaviour
 
         if (targetObstacle != null && Input.GetKey(KeyCode.W) && Input.GetKeyDown(targetObstacle.key))
         {
-            Jump();
+            float dist = Vector3.Distance(transform.position, targetObstacle.entryPos.transform.position);
+            if (dist <= 2) Jump();
         }
         if (targetObstacle != null && !Input.GetKey(KeyCode.W) && Input.GetKeyDown(KeyCode.Space))
         {
