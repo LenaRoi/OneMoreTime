@@ -61,6 +61,8 @@ public class AudioRhythmLine : MonoBehaviour
     [Range(0f, 0.5f)] public float noiseGate = 0.06f;
 
     [Header("Renk / Neon")]
+    [Tooltip("Blokların materyali. BUILD'de görünmesi için buraya bir materyal ata (kod içi Shader.Find build'de silinebilir). GameManager'daki materyali kullanabilirsin.")]
+    public Material blockMaterial;
     [Tooltip("Beyaz tonları arası fark (0 = hepsi saf beyaz, yüksek = bazı sütunlar daha gri).")]
     [Range(0f, 0.8f)] public float shadeVariation = 0.35f;
     [Tooltip("Parlaklık (neon etkisi; Bloom ile daha güçlü görünür).")]
@@ -83,6 +85,8 @@ public class AudioRhythmLine : MonoBehaviour
     private int builtBars, builtSegments;
 
     static readonly int ColorID = Shader.PropertyToID("_Color");
+    static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
+    private int _colorProp = Shader.PropertyToID("_Color");
 
     void Start()
     {
@@ -143,7 +147,9 @@ public class AudioRhythmLine : MonoBehaviour
         float radius = bent ? width / bendRad : 0f;
 
         Vector3 scale = new Vector3(blockW, blockH, thickness);
-        var shader = Shader.Find("Unlit/Color");
+        // Materyal ata (build'de görünür); yoksa Unlit/Color'a düş
+        Material template = blockMaterial != null ? blockMaterial : new Material(Shader.Find("Unlit/Color"));
+        _colorProp = template.HasProperty(BaseColorID) ? BaseColorID : ColorID;
 
         for (int b = 0; b < bars; b++)
         {
@@ -152,7 +158,7 @@ public class AudioRhythmLine : MonoBehaviour
             float shade = Mathf.Lerp(1f - shadeVariation, 1f, t);
             barColors[b] = new Color(shade, shade, shade, 1f);
             // Sütun başına TEK materyal (blok başına değil) → çok daha az materyal
-            barMaterials[b] = new Material(shader) { enableInstancing = true };
+            barMaterials[b] = new Material(template) { enableInstancing = true };
 
             // Bu sütunun yay üzerindeki konumu ve dönüşü
             float frac = (b + 0.5f) / bars;
@@ -243,7 +249,7 @@ public class AudioRhythmLine : MonoBehaviour
                 bool on = s < lit;
                 if (!on && !showUnlit) { mr.enabled = false; continue; }
                 mr.enabled = true;
-                mpb.SetColor(ColorID, on ? c : dim);
+                mpb.SetColor(_colorProp, on ? c : dim);
                 mr.SetPropertyBlock(mpb);
             }
         }

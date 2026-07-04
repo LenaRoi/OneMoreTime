@@ -52,6 +52,8 @@ public class AudioEqualizerCurved : MonoBehaviour
     [Range(0f, 0.5f)] public float noiseGate = 0.06f;
 
     [Header("Renk / Neon")]
+    [Tooltip("Blokların materyali. BUILD'de görünmesi için buraya bir materyal ata (kod içi Shader.Find build'de silinebilir). GameManager'daki materyali kullanabilirsin.")]
+    public Material blockMaterial;
     [Range(0f, 0.8f)] public float shadeVariation = 0.35f;
     [Range(1f, 8f)] public float brightness = 2.2f;
     [Tooltip("Sönük (yanmayan) blokları göster. Kapalı = saydam (arka plan görünür).")]
@@ -77,6 +79,8 @@ public class AudioEqualizerCurved : MonoBehaviour
     private float _totalLen;
 
     static readonly int ColorID = Shader.PropertyToID("_Color");
+    static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
+    private int _colorProp = Shader.PropertyToID("_Color");
 
     void Start()
     {
@@ -135,14 +139,16 @@ public class AudioEqualizerCurved : MonoBehaviour
         float radialOffset = surfaceOffset + thickness * 0.5f;
 
         Vector3 scale = new Vector3(blockW, blockH, thickness);
-        var shader = Shader.Find("Unlit/Color");
+        // Materyal ata (build'de görünür); yoksa Unlit/Color'a düş
+        Material template = blockMaterial != null ? blockMaterial : new Material(Shader.Find("Unlit/Color"));
+        _colorProp = template.HasProperty(BaseColorID) ? BaseColorID : ColorID;
 
         for (int b = 0; b < bars; b++)
         {
             float shadeT = bars <= 1 ? 1f : (float)b / (bars - 1);
             float shade = Mathf.Lerp(1f - shadeVariation, 1f, shadeT);
             barColors[b] = new Color(shade, shade, shade, 1f);
-             barMaterials[b] = new Material(shader) { enableInstancing = true };
+            barMaterials[b] = new Material(template) { enableInstancing = true };
 
             // Yol üzerinde bu sütunun konumu ve teğeti
             float dist = startLen + (b + 0.5f) * barPitch;
@@ -289,7 +295,7 @@ public class AudioEqualizerCurved : MonoBehaviour
                 bool on = s < lit;
                 if (!on && !showUnlit) { mr.enabled = false; continue; }
                 mr.enabled = true;
-                mpb.SetColor(ColorID, on ? c : dim);
+                mpb.SetColor(_colorProp, on ? c : dim);
                 mr.SetPropertyBlock(mpb);
             }
         }

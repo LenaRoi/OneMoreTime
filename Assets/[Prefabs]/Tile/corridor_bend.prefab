@@ -168,6 +168,7 @@ MonoBehaviour:
   autoBalance: 1
   balanceFalloff: 0.6
   noiseGate: 0
+  blockMaterial: {fileID: 2100000, guid: 7594ec53f65b23644b35ca2dc1ee58b5, type: 2}
   shadeVariation: 0.35
   brightness: 2.2
   showUnlit: 0

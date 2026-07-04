@@ -34,6 +34,8 @@ public class DeadEndMark : MonoBehaviour
     public float surfaceOffset = 0.02f;
 
     [Header("Renk / Neon")]
+    [Tooltip("Çizgi materyali. BUILD'de görünmesi için buraya bir materyal ata (kod içi Shader.Find build'de silinebilir). GameManager'daki materyali kullanabilirsin.")]
+    public Material lineMaterial;
     public Color color = Color.red;
     [Range(1f, 8f)] public float brightness = 2.5f;
 
@@ -74,8 +76,11 @@ public class DeadEndMark : MonoBehaviour
         mark.SetParent(transform, false);
         mark.localPosition = new Vector3(0f, 0f, surfaceOffset);
 
-        var shader = Shader.Find("Unlit/Color");
-        var mat = new Material(shader) { color = color * brightness };
+        // Materyal ata (build'de görünür); yoksa Unlit/Color'a düş
+        Color tint = color * brightness;
+        Material mat = lineMaterial != null ? new Material(lineMaterial) : new Material(Shader.Find("Unlit/Color"));
+        if (mat.HasProperty(Shader.PropertyToID("_BaseColor"))) mat.SetColor("_BaseColor", tint);
+        if (mat.HasProperty(Shader.PropertyToID("_Color"))) mat.color = tint;
 
         // Çember
         circle = NewLine("Circle", mat, circleSegments + 1, true);
