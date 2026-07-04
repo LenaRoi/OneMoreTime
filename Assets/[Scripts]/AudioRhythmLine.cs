@@ -1,24 +1,33 @@
 using UnityEngine;
 
 /// <summary>
-/// Neon spectrum equalizer on a cube face. Builds a grid of little cube blocks:
-/// each column is a frequency band, stacked segments light up with the music
-/// (rainbow colored), like a classic audio equalizer. Auto-fits the chosen face,
-/// so scaling the cube keeps it on the surface. Attach to the cube.
+/// Neon spectrum equalizer panel. Builds a grid of little cube blocks in the
+/// LOCAL space of this transform (right = local X, up = local Y, blocks extrude
+/// along local Z). Each column is a frequency band; stacked segments light up
+/// with the music (rainbow), like a classic equalizer. Attach to an empty child
+/// placed flat against a wall (e.g. a corridor tile's left wall): set the panel
+/// width/height to the wall area and rotate the transform so local Z faces into
+/// the room.
 /// </summary>
-[RequireComponent(typeof(AudioSource))]
 public class AudioRhythmLine : MonoBehaviour
 {
-    public enum Face { Front, Back, Left, Right, Top, Bottom }
+    public enum VerticalAnchor { Center, Bottom }
 
-    [Header("Yüzey")]
-    [Tooltip("Equalizer'ın çizileceği küp yüzeyi.")]
-    public Face face = Face.Front;
+    [Header("Ses Kaynağı")]
+    [Tooltip("Açık: sahnedeki ORTAK müziği (AudioListener) dinler; bu objenin kendi AudioSource'u susturulur (yankı olmaz). Kapalı: bu objenin kendi AudioSource'u.")]
+    public bool useSharedAudio = true;
 
-    [Tooltip("Yüzey boyutunu mesh'ten otomatik oku (küpü ölçeklersen uyum sağlar).")]
-    public bool autoFitToMesh = true;
-    [Tooltip("autoFitToMesh kapalıysa kullanılacak yerel küp boyutu.")]
-    public float manualCubeSize = 1f;
+    [Header("Panel (Duvar) Boyutu — yerel birim")]
+    [Tooltip("Panelin genişliği (koridor boyunca).")]
+    public float panelWidth = 4f;
+    [Tooltip("Panelin yüksekliği (tabandan tavana).")]
+    public float panelHeight = 2f;
+    [Tooltip("Blokların hangi yöne çıkacağı: açık = yerel +Z, kapalı = yerel -Z. Duvarın iç yüzüne göre seç.")]
+    public bool faceForward = true;
+    [Tooltip("Dikey hizalama: Bottom = tabandan yukarı büyür (duvar için ideal), Center = ortalı.")]
+    public VerticalAnchor verticalAnchor = VerticalAnchor.Bottom;
+    [Tooltip("Yatay eğrilik (derece). 0 = düz duvar. + sola, - sağa büker; dönen koridor duvarına uydurmak için (örn. 90° dönüş ≈ 90).")]
+    [Range(-180f, 180f)] public float bendAngle = 0f;
 
     [Header("Izgara")]
     [Tooltip("Sütun (frekans bandı) sayısı.")]
@@ -26,13 +35,13 @@ public class AudioRhythmLine : MonoBehaviour
     [Tooltip("Her sütundaki blok (segment) sayısı.")]
     [Range(3, 40)] public int segments = 16;
 
-    [Tooltip("Yüzeyin ne kadarını doldursun (1 = kenardan kenara).")]
+    [Tooltip("Panelin ne kadarını doldursun (1 = kenardan kenara).")]
     [Range(0.3f, 1f)] public float fillFraction = 0.95f;
     [Tooltip("Bloğun kendi hücresini doldurma oranı (aradaki boşluk).")]
     [Range(0.3f, 1f)] public float blockFill = 0.8f;
-    [Tooltip("Blokların yüzeyden dışarı kalınlığı.")]
+    [Tooltip("Blokların dışarı kalınlığı.")]
     public float thickness = 0.03f;
-    [Tooltip("Yüzeyden dışarı küçük kaldırma (z-fighting'i önler).")]
+    [Tooltip("Duvardan dışarı küçük kaldırma (z-fighting'i önler).")]
     public float surfaceOffset = 0.005f;
 
     [Header("Tepki")]
@@ -48,18 +57,16 @@ public class AudioRhythmLine : MonoBehaviour
     [Range(0f, 1f)] public float autoBalance = 0.8f;
     [Tooltip("Zirve takibinin düşme hızı (düşük = zirveyi uzun hatırlar, daha kararlı denge).")]
     [Range(0.1f, 5f)] public float balanceFalloff = 0.6f;
-    [Tooltip("Gürültü kapısı: bu eşiğin altındaki bantlar boş kalır (fısıltı/gürültü yükselmesin).")]
+    [Tooltip("Gürültü kapısı: en gür banda kıyasla bu oranın altındaki bantlar boş kalır.")]
     [Range(0f, 0.5f)] public float noiseGate = 0.06f;
 
     [Header("Renk / Neon")]
-    [Tooltip("Gökkuşağı renk taraması başlangıcı (0=kırmızı).")]
-    [Range(0f, 1f)] public float hueStart = 0f;
-    [Tooltip("Renk taraması genişliği (0.8 ≈ kırmızıdan mora).")]
-    [Range(0.2f, 1f)] public float hueRange = 0.85f;
-    [Tooltip("Renk parlaklığı (neon etkisi; Bloom ile daha güçlü görünür).")]
+    [Tooltip("Beyaz tonları arası fark (0 = hepsi saf beyaz, yüksek = bazı sütunlar daha gri).")]
+    [Range(0f, 0.8f)] public float shadeVariation = 0.35f;
+    [Tooltip("Parlaklık (neon etkisi; Bloom ile daha güçlü görünür).")]
     [Range(1f, 8f)] public float brightness = 2.2f;
-    [Tooltip("Sönük (yanmayan) blokları göster (koyu). Kapalı = tamamen gizle.")]
-    public bool showUnlit = true;
+    [Tooltip("Sönük (yanmayan) blokları göster. Kapalı = saydam (arka plan görünür).")]
+    public bool showUnlit = false;
     [Range(0f, 0.4f)] public float unlitDim = 0.12f;
 
     private AudioSource audioSource;
@@ -71,33 +78,39 @@ public class AudioRhythmLine : MonoBehaviour
     private MeshRenderer[,] blocks;
     private MaterialPropertyBlock mpb;
     private Color[] barColors;
+    private Material[] barMaterials;
     private Transform grid;
     private int builtBars, builtSegments;
-    private Vector3 halfExtents = Vector3.one * 0.5f;
 
     static readonly int ColorID = Shader.PropertyToID("_Color");
 
     void Start()
     {
-        audioSource = GetComponent<AudioSource>();
+        if (useSharedAudio)
+        {
+            var src = GetComponent<AudioSource>();
+            if (src != null) { src.playOnAwake = false; src.Stop(); src.enabled = false; }
+        }
+        else
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
         mpb = new MaterialPropertyBlock();
         Build();
     }
 
-    void CacheExtents()
+    // Ortak (paylaşılan) veya kendi AudioSource'undan spektrum
+    float[] GetSpectrum()
     {
-        if (autoFitToMesh)
-        {
-            var mf = GetComponent<MeshFilter>();
-            if (mf != null && mf.sharedMesh != null) { halfExtents = mf.sharedMesh.bounds.extents; return; }
-        }
-        halfExtents = Vector3.one * (manualCubeSize * 0.5f);
+        if (useSharedAudio) return AudioSpectrumProvider.GetShared();
+        if (audioSource == null) audioSource = GetComponent<AudioSource>();
+        if (audioSource == null) return AudioSpectrumProvider.GetShared();
+        audioSource.GetSpectrumData(spectrum, 0, FFTWindow.BlackmanHarris);
+        return spectrum;
     }
 
     void Build()
     {
-        CacheExtents();
-
         // Eski ızgarayı temizle
         var old = transform.Find("Equalizer");
         if (old != null) DestroyImmediate(old.gameObject);
@@ -111,32 +124,54 @@ public class AudioRhythmLine : MonoBehaviour
         rawMag = new float[bars];
         blocks = new MeshRenderer[bars, segments];
         barColors = new Color[bars];
+        barMaterials = new Material[bars];
 
-        Vector3 right, up, normal;
-        GetFaceBasis(out right, out up, out normal);
-        float halfW = Vector3.Dot(new Vector3(halfExtents.x, halfExtents.y, halfExtents.z), Abs(right));
-        float halfV = Vector3.Dot(new Vector3(halfExtents.x, halfExtents.y, halfExtents.z), Abs(up));
-        float outN = Vector3.Dot(new Vector3(halfExtents.x, halfExtents.y, halfExtents.z), Abs(normal));
-
-        float width = 2f * halfW * fillFraction;
-        float height = 2f * halfV * fillFraction;
+        float dir = faceForward ? 1f : -1f;
+        float width = panelWidth * fillFraction;
+        float height = panelHeight * fillFraction;
         float barPitch = width / bars;
         float segPitch = height / segments;
         float blockW = barPitch * blockFill;
         float blockH = segPitch * blockFill;
-        float leftStart = -halfW * fillFraction;
-        float bottom = -halfV * fillFraction;
-        float outPos = outN + surfaceOffset + thickness * 0.5f;
+        float bottom = verticalAnchor == VerticalAnchor.Bottom ? 0f : -height * 0.5f;
+        float radialOffset = surfaceOffset + thickness * 0.5f;
 
-        Vector3 scale = Abs(right) * blockW + Abs(up) * blockH + Abs(normal) * thickness;
+        // Eğrilik: sütunlar Y ekseni etrafında bir yay boyunca dizilir.
+        // width = yay uzunluğu; bendAngle toplam açı. 0 ise düz.
+        float bendRad = bendAngle * Mathf.Deg2Rad;
+        bool bent = Mathf.Abs(bendRad) > 1e-4f;
+        float radius = bent ? width / bendRad : 0f;
+
+        Vector3 scale = new Vector3(blockW, blockH, thickness);
         var shader = Shader.Find("Unlit/Color");
 
         for (int b = 0; b < bars; b++)
         {
-            float hue = hueStart + (bars <= 1 ? 0f : (float)b / (bars - 1)) * hueRange;
-            barColors[b] = Color.HSVToRGB(Mathf.Repeat(hue, 1f), 0.9f, 1f);
+            // Beyazın tonları: sütunlar arası hafif gri-beyaz değişim
+            float t = bars <= 1 ? 1f : (float)b / (bars - 1);
+            float shade = Mathf.Lerp(1f - shadeVariation, 1f, t);
+            barColors[b] = new Color(shade, shade, shade, 1f);
+            // Sütun başına TEK materyal (blok başına değil) → çok daha az materyal
+            barMaterials[b] = new Material(shader) { enableInstancing = true };
 
-            float rx = leftStart + (b + 0.5f) * barPitch;
+            // Bu sütunun yay üzerindeki konumu ve dönüşü
+            float frac = (b + 0.5f) / bars;
+            Vector3 barPos;
+            Quaternion barRot;
+            if (bent)
+            {
+                float theta = (frac - 0.5f) * bendRad;
+                barPos = new Vector3(radius * Mathf.Sin(theta), 0f, radius * (Mathf.Cos(theta) - 1f));
+                barRot = Quaternion.Euler(0f, theta * Mathf.Rad2Deg, 0f);
+            }
+            else
+            {
+                barPos = new Vector3((frac - 0.5f) * width, 0f, 0f);
+                barRot = Quaternion.identity;
+            }
+            // Blokların dışarı (radyal) çıkış yönü
+            Vector3 normalDir = barRot * Vector3.forward * dir;
+
             for (int s = 0; s < segments; s++)
             {
                 float uy = bottom + (s + 0.5f) * segPitch;
@@ -145,11 +180,12 @@ public class AudioRhythmLine : MonoBehaviour
                 var col = go.GetComponent<Collider>();
                 if (col != null) DestroyImmediate(col);
                 go.transform.SetParent(grid, false);
-                go.transform.localPosition = right * rx + up * uy + normal * outPos;
+                go.transform.localPosition = barPos + Vector3.up * uy + normalDir * radialOffset;
+                go.transform.localRotation = barRot;
                 go.transform.localScale = scale;
 
                 var mr = go.GetComponent<MeshRenderer>();
-                mr.sharedMaterial = new Material(shader);
+                mr.sharedMaterial = barMaterials[b];
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 mr.receiveShadows = false;
                 blocks[b, s] = mr;
@@ -165,7 +201,7 @@ public class AudioRhythmLine : MonoBehaviour
         if (blocks == null || builtBars != bars || builtSegments != segments)
             Build();
 
-        audioSource.GetSpectrumData(spectrum, 0, FFTWindow.BlackmanHarris);
+        float[] spec = GetSpectrum();
 
         float fall = Mathf.Exp(-Time.deltaTime * balanceFalloff);
 
@@ -173,29 +209,25 @@ public class AudioRhythmLine : MonoBehaviour
         globalPeak *= fall;
         for (int b = 0; b < bars; b++)
         {
-            // Logaritmik bant: alt frekanslar daha geniş temsil edilir
-            int lo = Mathf.FloorToInt(Mathf.Pow((float)b / bars, 2f) * spectrum.Length);
-            int hi = Mathf.FloorToInt(Mathf.Pow((float)(b + 1) / bars, 2f) * spectrum.Length);
+            int lo = Mathf.FloorToInt(Mathf.Pow((float)b / bars, 2f) * spec.Length);
+            int hi = Mathf.FloorToInt(Mathf.Pow((float)(b + 1) / bars, 2f) * spec.Length);
             hi = Mathf.Max(hi, lo + 1);
             float sum = 0f;
-            for (int i = lo; i < hi && i < spectrum.Length; i++) sum += spectrum[i];
-            float mag = sum / (hi - lo);             // ham büyüklük (sensitivity'siz)
+            for (int i = lo; i < hi && i < spec.Length; i++) sum += spec[i];
+            float mag = sum / (hi - lo);
 
             rawMag[b] = mag;
-            barPeak[b] = Mathf.Max(mag, barPeak[b] * fall);   // anında yüksel, yavaş düş
+            barPeak[b] = Mathf.Max(mag, barPeak[b] * fall);
             globalPeak = Mathf.Max(globalPeak, barPeak[b]);
         }
         float gp = Mathf.Max(globalPeak, 1e-6f);
 
-        // 2. GEÇİŞ: dengeli seviye + en gür banda göre gürültü kapısı
+        // 2. GEÇİŞ: dengeli seviye + gürültü kapısı + blokları güncelle
         for (int b = 0; b < bars; b++)
         {
             float absolute = Mathf.Clamp01(rawMag[b] * sensitivity);
             float balanced = Mathf.Clamp01(rawMag[b] / Mathf.Max(barPeak[b], 1e-6f));
-
-            // Bandın son zirvesi en gür banda kıyasla çok düşükse gölgele (kendi kendini ölçekler)
             float gate = Mathf.Clamp01(barPeak[b] / (gp * noiseGate + 1e-6f));
-
             float target = Mathf.Clamp01(Mathf.Lerp(absolute, balanced, autoBalance) * gate);
 
             float rate = (target > level[b] ? attack : decay) * Time.deltaTime;
@@ -216,19 +248,4 @@ public class AudioRhythmLine : MonoBehaviour
             }
         }
     }
-
-    void GetFaceBasis(out Vector3 right, out Vector3 up, out Vector3 normal)
-    {
-        switch (face)
-        {
-            case Face.Front: right = Vector3.right; up = Vector3.up; normal = Vector3.forward; break;
-            case Face.Back: right = Vector3.left; up = Vector3.up; normal = Vector3.back; break;
-            case Face.Left: right = Vector3.forward; up = Vector3.up; normal = Vector3.left; break;
-            case Face.Right: right = Vector3.back; up = Vector3.up; normal = Vector3.right; break;
-            case Face.Top: right = Vector3.right; up = Vector3.forward; normal = Vector3.up; break;
-            default: right = Vector3.right; up = Vector3.back; normal = Vector3.down; break; // Bottom
-        }
-    }
-
-    static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
 }
