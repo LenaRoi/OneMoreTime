@@ -142,7 +142,7 @@ public class AudioEqualizerCurved : MonoBehaviour
             float shadeT = bars <= 1 ? 1f : (float)b / (bars - 1);
             float shade = Mathf.Lerp(1f - shadeVariation, 1f, shadeT);
             barColors[b] = new Color(shade, shade, shade, 1f);
-            barMaterials[b] = new Material(shader) { enableInstancing = true };
+             barMaterials[b] = new Material(shader) { enableInstancing = true };
 
             // Yol üzerinde bu sütunun konumu ve teğeti
             float dist = startLen + (b + 0.5f) * barPitch;
