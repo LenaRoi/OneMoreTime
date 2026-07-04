@@ -8,7 +8,15 @@ public class CameraRewind : MonoBehaviour
     [SerializeField] private float recordInterval = 0.02f;   // 50 kayıt/sn
     [SerializeField] private float maxRecordTime = 10f;       // Son kaç saniye tutulsun
 
-    [SerializeField] private float rewindSpeed = 3f;
+    [Header("Rewind Süresi (yol uzunluğuna göre)")]
+    [Tooltip("En kısa süre (kısa yol).")]
+    [SerializeField] private float minDuration = 1f;
+    [Tooltip("En uzun süre (uzun yol).")]
+    [SerializeField] private float maxDuration = 3.5f;
+    [Tooltip("Süre hesabı için hız: yolun kaç birimi 1 saniyeye denk gelsin (yüksek = daha hızlı geri sar).")]
+    [SerializeField] private float rewindUnitsPerSecond = 25f;
+    [Tooltip("Yumuşak giriş/çıkış (ease-in-out).")]
+    [SerializeField] private bool ease = true;
 
     private class CameraState
     {
@@ -65,32 +73,49 @@ public class CameraRewind : MonoBehaviour
         isRewinding = true;
         isRecording = false;
 
-        while (history.Count > 1)
+        // Geçmişi diziye al: index 0 = en eski (başlangıç), son = en yeni (şu an)
+        var states = new List<CameraState>(history);
+        history.Clear();
+
+        int n = states.Count;
+        if (n < 2)
         {
-            CameraState from = history.Last.Value;
-            history.RemoveLast();
-
-            CameraState to = history.Last.Value;
-
-            float elapsed = 0f;
-
-            while (elapsed < recordInterval)
-            {
-                elapsed += Time.deltaTime * rewindSpeed;
-
-                float t = Mathf.Clamp01(elapsed / recordInterval);
-
-                transform.position = Vector3.Lerp(from.Position, to.Position, t);
-                transform.rotation = Quaternion.Slerp(from.Rotation, to.Rotation, t);
-
-                yield return null;
-            }
-
-            transform.position = to.Position;
-            transform.rotation = to.Rotation;
+            isRecording = true;
+            isRewinding = false;
+            yield break;
         }
 
-        history.Clear();
+        int segments = n - 1;
+
+        // Kat edilen toplam yol uzunluğu → süre (min..max arası)
+        float pathLength = 0f;
+        for (int k = 1; k < n; k++)
+            pathLength += Vector3.Distance(states[k - 1].Position, states[k].Position);
+        float duration = Mathf.Clamp(pathLength / Mathf.Max(0.01f, rewindUnitsPerSecond),
+                                     minDuration, maxDuration);
+
+        float elapsed = 0f;
+
+        // Süre boyunca yeni -> eski tüm yolu kat et (kare başına gereken kadar segment)
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float p = Mathf.Clamp01(elapsed / duration);
+            if (ease) p = Mathf.SmoothStep(0f, 1f, p);
+
+            float f = (1f - p) * segments;               // segments (yeni) -> 0 (eski)
+            int i = Mathf.Clamp(Mathf.FloorToInt(f), 0, segments - 1);
+            float frac = f - i;
+
+            transform.position = Vector3.Lerp(states[i].Position, states[i + 1].Position, frac);
+            transform.rotation = Quaternion.Slerp(states[i].Rotation, states[i + 1].Rotation, frac);
+
+            yield return null;
+        }
+
+        // Başlangıç (en eski) noktaya sabitle
+        transform.position = states[0].Position;
+        transform.rotation = states[0].Rotation;
 
         isRecording = true;
         isRewinding = false;
