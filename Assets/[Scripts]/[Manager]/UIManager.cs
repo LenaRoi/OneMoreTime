@@ -2,10 +2,13 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using UnityEngine.UI;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager instance;
+
+    public Image fill; 
 
     private void Awake()
     {
@@ -18,6 +21,11 @@ public class UIManager : MonoBehaviour
         {
             buttons[i].transform.DOScale(1.2f, 0.1f).SetLoops(-1, LoopType.Yoyo);
         }
+    }
+
+    private void Update()
+    {
+        fill.fillAmount = GameManager.instance.score;
     }
 
     public List<GameObject> buttons;

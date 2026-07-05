@@ -49,7 +49,7 @@ public class GameManager : MonoBehaviour
 
     public void AddScore()
     {
-        if (score < 0.4f) score = score + 0.4f;
+        if (score < 0.6f) score = score + 0.6f;
         else score = 1;
     }
 
