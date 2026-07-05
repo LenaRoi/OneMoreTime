@@ -38,22 +38,36 @@ public class ScreenBlurFade : MonoBehaviour
         mat = null;
     }
 
-    /// <summary>Tam bulanıktan nete <paramref name="duration"/> saniyede aç (deadloop sonrası).</summary>
-    public void PlayFocusIn(float duration = 1f)
+    /// <summary>
+    /// Bulanıklığı <paramref name="fadeIn"/> saniyede 0 -> tam yükseltir (görüş yavaşça
+    /// bulanıklaşır), sonra <paramref name="focusOut"/> saniyede tam -> 0 nete açar.
+    /// fadeIn'i deadloop BİTMEDEN önce tetikle ki tam bulanık an reset karesine denk gelsin.
+    /// </summary>
+    public void PlayFadeFocus(float fadeIn, float focusOut)
     {
         if (!isActiveAndEnabled) return;
         if (anim != null) StopCoroutine(anim);
-        anim = StartCoroutine(FocusIn(Mathf.Max(0.01f, duration)));
+        anim = StartCoroutine(FadeFocus(Mathf.Max(0f, fadeIn), Mathf.Max(0.01f, focusOut)));
     }
 
-    IEnumerator FocusIn(float duration)
+    IEnumerator FadeFocus(float fadeIn, float focusOut)
     {
-        blur01 = 1f;
+        // 1) Fade in: net -> tam bulanık (rewind'in son anında görüş bulanıklaşır)
         float t = 0f;
-        while (t < duration)
+        while (t < fadeIn)
         {
             t += Time.unscaledDeltaTime;                    // pause/timescale'den bağımsız
-            blur01 = 1f - Mathf.SmoothStep(0f, 1f, t / duration);
+            blur01 = Mathf.SmoothStep(0f, 1f, t / fadeIn);
+            yield return null;
+        }
+        blur01 = 1f;
+
+        // 2) Focus out: tam bulanık -> net (yavaşça açılır)
+        t = 0f;
+        while (t < focusOut)
+        {
+            t += Time.unscaledDeltaTime;
+            blur01 = 1f - Mathf.SmoothStep(0f, 1f, t / focusOut);
             yield return null;
         }
         blur01 = 0f;
