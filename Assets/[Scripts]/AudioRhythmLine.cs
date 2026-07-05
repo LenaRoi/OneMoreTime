@@ -73,7 +73,7 @@ public class AudioRhythmLine : MonoBehaviour
 
     [Header("Performans")]
     [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez ve çizilmez (uzaktakiler FPS düşürmesin). 0 = hep aktif.")]
-    public float maxVisibleDistance = 40f;
+    public float maxVisibleDistance = 12f;
 
     private AudioSource audioSource;
     private float[] spectrum;

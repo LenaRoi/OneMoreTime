@@ -313,6 +313,27 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 3709618601185046416, guid: 8ab08954edac8444c92583df69a55960, type: 3}
   m_PrefabInstance: {fileID: 7016151400484794680}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &353436166 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1467751914333002562, guid: 04076883c704f6a48a3c4a8090100aaa, type: 3}
+  m_PrefabInstance: {fileID: 255466610417347738}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &353436170
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 353436166}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52fe34c4d393034e812bf180bc33a63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  firstStartTime: 12
+  loopStartTime: 18
+  loop: 1
+  playOnStart: 1
 --- !u!4 &397322397 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1507529736179529309, guid: 04076883c704f6a48a3c4a8090100aaa, type: 3}
@@ -1076,10 +1097,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gameMusic: {fileID: 1312705379538505139}
+  musicPlayer: {fileID: 0}
   isResetting: 0
   score: 1
   rewing: {fileID: 963194229}
   playerMovement: {fileID: 544219300}
+  buttonOpeners: []
 --- !u!4 &2017688367 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1507529736179529309, guid: 04076883c704f6a48a3c4a8090100aaa, type: 3}
@@ -1257,7 +1280,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1467751914333002562, guid: 04076883c704f6a48a3c4a8090100aaa, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 353436170}
   m_SourcePrefab: {fileID: 100100000, guid: 04076883c704f6a48a3c4a8090100aaa, type: 3}
 --- !u!1001 &372375185336979372
 PrefabInstance:
@@ -4944,6 +4970,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9101129128274029842}
   - component: {fileID: 1312705379538505139}
+  - component: {fileID: 9101129128274029843}
   m_Layer: 6
   m_Name: Audio
   m_TagString: Untagged
@@ -5421,6 +5448,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &9101129128274029843
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8143607815120153645}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52fe34c4d393034e812bf180bc33a63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  firstStartTime: 12
+  loopStartTime: 30
+  loop: 1
+  playOnStart: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

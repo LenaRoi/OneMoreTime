@@ -1236,7 +1236,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   firstStartTime: 12
-  loopStartTime: 32
+  loopStartTime: 30
   loop: 1
   playOnStart: 1
 --- !u!4 &848453356 stripped

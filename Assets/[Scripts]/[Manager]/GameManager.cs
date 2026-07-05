@@ -13,6 +13,12 @@ public class GameManager : MonoBehaviour
     #endregion
 
     public AudioSource gameMusic;
+    [Tooltip("Deadloop sonrası müziği loopStartTime'dan başlatmak için. Boşsa gameMusic'ten alınır.")]
+    public MusicPlayer musicPlayer;
+    [Tooltip("Deadloop sonrası 1sn bulanık->net açılış. Boşsa sahnede/Main Camera'da aranır.")]
+    public ScreenBlurFade blurFade;
+
+    public bool gameOver = false;
 
     public bool isResetting = false;
 
@@ -25,7 +31,7 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        if (!isResetting)
+        if (!isResetting && !gameOver)
         {
             score -= 0.1f * Time.deltaTime;
             gameMusic.volume = score;
@@ -64,6 +70,31 @@ public class GameManager : MonoBehaviour
             buttonOpeners[i].ResetDaft();
         }
         isResetting = false;
+        score = 1;
+
+        // Deadloop (ölüm) animasyonu bittikten sonra müziği loopStartTime'dan (30sn) başlat.
+        // Referansı sağlamlaştır: önce Inspector alanı, sonra gameMusic objesi, en son sahnede ara.
+        if (musicPlayer == null && gameMusic != null)
+            musicPlayer = gameMusic.GetComponent<MusicPlayer>();
+        if (musicPlayer == null)
+            musicPlayer = FindObjectOfType<MusicPlayer>();
+        if (musicPlayer != null)
+            musicPlayer.RestartFromLoop();
+        else
+            Debug.LogWarning("GameManager: Sahnede MusicPlayer bulunamadı; deadloop sonrası müzik 30sn'den başlatılamadı.", this);
+
+        // Deadloop sonrası 1 saniyelik bulanık -> net açılış.
+        if (blurFade == null)
+            blurFade = FindObjectOfType<ScreenBlurFade>();
+        if (blurFade == null && Camera.main != null)
+            blurFade = Camera.main.GetComponent<ScreenBlurFade>();
+        if (blurFade != null)
+            blurFade.PlayFocusIn(1f);
+    }
+
+    public void GameOver()
+    {
+        gameOver = true;
         score = 1;
     }
 }

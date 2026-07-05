@@ -15,8 +15,8 @@ public class MusicPlayer : MonoBehaviour
     [Tooltip("Oyun ilk açıldığında başlayacağı saniye.")]
     [Min(0f)] public float firstStartTime = 12f;
 
-    [Tooltip("Döngüde (tekrarda) başlayacağı saniye — intro atlanır.")]
-    [Min(0f)] public float loopStartTime = 18f;
+    [Tooltip("Döngüde/deadloop sonrası başlayacağı saniye — intro atlanır.")]
+    [Min(0f)] public float loopStartTime = 30f;
 
     [Tooltip("Şarkı bitince döngüye girsin mi.")]
     public bool loop = true;
@@ -47,6 +47,9 @@ public class MusicPlayer : MonoBehaviour
         if (started && loop && !busy && Time.time >= guardUntil && !source.isPlaying)
             PlayFrom(loopStartTime);
     }
+
+    /// <summary>Deadloop (ölüm) animasyonundan sonra çağrılır: müziği loopStartTime'dan yeniden başlatır.</summary>
+    public void RestartFromLoop() => PlayFrom(loopStartTime);
 
     /// <summary>Şarkıyı verilen saniyeden başlatır (yüklemeyi bekler).</summary>
     public void PlayFrom(float time)
