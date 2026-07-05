@@ -78,14 +78,14 @@ public class CameraHolderController : MonoBehaviour
             if (movement.targetDoor != hit2.transform.gameObject.GetComponent<Door>())
             {
                 movement.targetDoor = hit2.transform.gameObject.GetComponent<Door>();
-                UIManager.instance.OpenButton(2);
+                UIManager.instance.OpenButtonDoor();
             }
             
         }
         else
         {
             movement.targetDoor = null;
-            UIManager.instance.CloseButton();
+            UIManager.instance.CloseButtonDoor();
         }
         // 1. FARE GİRDİLERİNİ ALMA
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
