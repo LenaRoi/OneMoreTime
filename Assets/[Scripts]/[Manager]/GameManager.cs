@@ -82,22 +82,14 @@ public class GameManager : MonoBehaviour
             musicPlayer.RestartFromLoop();
         else
             Debug.LogWarning("GameManager: Sahnede MusicPlayer bulunamadı; deadloop sonrası müzik 30sn'den başlatılamadı.", this);
-    }
 
-    /// <summary>
-    /// Bulanık geçişi başlatır: <paramref name="fadeIn"/> saniyede bulanıklaşır, sonra
-    /// <paramref name="focusOut"/> saniyede nete açılır. CameraRewind tarafından deadloop
-    /// BİTMEDEN ~0.5sn önce tetiklenir; böylece tam bulanık an reset karesine denk gelir
-    /// ve kamera zıplaması görünmez.
-    /// </summary>
-    public void PlayRespawnBlur(float fadeIn = 0.5f, float focusOut = 1f)
-    {
+        // Deadloop sonrası 1 saniyelik bulanık -> net açılış.
         if (blurFade == null)
             blurFade = FindObjectOfType<ScreenBlurFade>();
         if (blurFade == null && Camera.main != null)
             blurFade = Camera.main.GetComponent<ScreenBlurFade>();
         if (blurFade != null)
-            blurFade.PlayFadeFocus(fadeIn, focusOut);
+            blurFade.PlayFocusIn(1f);
     }
 
     public void GameOver()

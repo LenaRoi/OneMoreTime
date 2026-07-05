@@ -18,12 +18,6 @@ public class CameraRewind : MonoBehaviour
     [Tooltip("Yumuşak giriş/çıkış (ease-in-out).")]
     [SerializeField] private bool ease = true;
 
-    [Header("Deadloop Bitişi Bulanıklık")]
-    [Tooltip("Rewind BİTMEDEN kaç saniye önce bulanıklık başlasın. Tam bulanık, rewind bitişine (reset karesine) denk gelir.")]
-    [SerializeField] private float blurLeadTime = 0.5f;
-    [Tooltip("Reset sonrası bulanıklığın yavaşça nete açılma süresi.")]
-    [SerializeField] private float blurFocusOut = 1f;
-
     private class CameraState
     {
         public Vector3 Position;
@@ -101,23 +95,11 @@ public class CameraRewind : MonoBehaviour
                                      minDuration, maxDuration);
 
         float elapsed = 0f;
-        bool blurTriggered = false;
 
         // Süre boyunca yeni -> eski tüm yolu kat et (kare başına gereken kadar segment)
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-
-            // Rewind bitmeden ~blurLeadTime önce bulanıklığı başlat: fadeIn = kalan süre,
-            // böylece TAM bulanık tam rewind bitişinde (reset karesinde) olur.
-            if (!blurTriggered && elapsed >= duration - blurLeadTime)
-            {
-                blurTriggered = true;
-                float fadeIn = Mathf.Max(0.05f, duration - elapsed);
-                if (GameManager.instance != null)
-                    GameManager.instance.PlayRespawnBlur(fadeIn, blurFocusOut);
-            }
-
             float p = Mathf.Clamp01(elapsed / duration);
             if (ease) p = Mathf.SmoothStep(0f, 1f, p);
 
