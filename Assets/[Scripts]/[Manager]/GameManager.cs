@@ -112,6 +112,8 @@ public class GameManager : MonoBehaviour
 
     public void GameOver()
     {
+        playerMovement.canMove = false;
+        playerMovement.canLook = false;
         gameOver = true;
         score = 1;
         playerMovement.GetHead();
