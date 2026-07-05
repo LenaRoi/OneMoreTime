@@ -3,7 +3,12 @@ guid: 45cde4b9848226c4aab2db0263af9145
 ModelImporter:
   serializedVersion: 22200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: scifi_box_material
+    second: {fileID: 2100000, guid: 991b01d0cb077ab43850722f8f4eb319, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

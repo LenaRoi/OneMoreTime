@@ -1,3 +1,4 @@
+using DG.Tweening;
 using UnityEngine;
 using static UnityEngine.GraphicsBuffer;
 
@@ -18,6 +19,7 @@ public class CameraHolderController : MonoBehaviour
 
     public GameObject playerHead;
     public LayerMask obstacleLayer;
+    public LayerMask doorLayer;
     void Start()
     {
         // Fare imlecini ekrana kilitler ve gizler
@@ -63,6 +65,18 @@ public class CameraHolderController : MonoBehaviour
         {
             movement.targetObstacle = null;
         }
+
+        Ray ray2 = new Ray(transform.position, transform.forward);
+
+        if (Physics.Raycast(ray2, out RaycastHit hit2, 2f, doorLayer))
+        {
+            Debug.Log(hit2.transform.gameObject);
+            movement.targetDoor = hit2.transform.gameObject.GetComponent<Door>();
+        }
+        else
+        {
+            movement.targetDoor = null;
+        }
         // 1. FARE GİRDİLERİNİ ALMA
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
@@ -87,5 +101,17 @@ public class CameraHolderController : MonoBehaviour
     {
         transform.SetParent(null);
         transform.localRotation = Quaternion.Euler(0, movement.transform.rotation.eulerAngles.y, 0);
+    }
+
+    public void Shake()
+    {
+        transform.GetChild(0).transform.DOShakePosition(
+            duration: 0.32f,
+            strength: 0.8f,
+            vibrato: 10,
+            randomness: 30,
+            snapping: false,
+            fadeOut: true
+        );
     }
 }

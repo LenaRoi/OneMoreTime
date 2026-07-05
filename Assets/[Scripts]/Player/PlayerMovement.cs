@@ -1,4 +1,5 @@
 using DG.Tweening;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -27,9 +28,11 @@ public class PlayerMovement : MonoBehaviour
 
     public Animator animator;
 
-    public CameraRewind rewing;
+    
 
     public SkinnedMeshRenderer bodysmr;
+
+    public Door targetDoor;
 
     void Start()
     {
@@ -39,15 +42,6 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         if (canMove) Move();
-
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            GameManager.instance.isResetting = true;
-            canMove = false;
-            canLook = false;
-            bodysmr.enabled = false;
-            rewing.StartRewind();
-        }
     }
 
     public void Move()
@@ -83,11 +77,19 @@ public class PlayerMovement : MonoBehaviour
         if (targetObstacle != null && Input.GetKey(KeyCode.W) && Input.GetKeyDown(targetObstacle.key))
         {
             float dist = Vector3.Distance(transform.position, targetObstacle.entryPos.transform.position);
-            if (dist <= 2) Jump();
+            float targetDist = 2;
+            if (targetObstacle.index == 6) targetDist = dist;
+            if (dist <= targetDist) Jump();
         }
         if (targetObstacle != null && !Input.GetKey(KeyCode.W) && Input.GetKeyDown(KeyCode.Space))
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
+
+        if (targetDoor != null && (Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0)))
+        {
+            if (!targetDoor.isOpened) cameraHolderController.Shake();
+            targetDoor.Opened();
         }
     }
     public void Jump()
@@ -97,6 +99,10 @@ public class PlayerMovement : MonoBehaviour
         Obstacle currentObstacle = targetObstacle;
         obstacleIndex = currentObstacle.index;
 
+        if (!currentObstacle.fakeObstacle)
+        {
+            GameManager.instance.AddScore();
+        }
 
         float dist = Vector3.Distance(transform.position, currentObstacle.entryPos.transform.position);
 
@@ -175,5 +181,53 @@ public class PlayerMovement : MonoBehaviour
                 });
             });
         }
+
+        else if (obstacleIndex == 6)
+        {
+            GameObject head = cameraHolderController.playerHead;
+            Vector3 localPos = head.transform.localPosition;
+            head.transform.DOLocalMoveZ(localPos.z - 0f, 0.1f);
+            canMove = false;
+            canLook = false;
+            animator.SetTrigger("BarJump");
+            transform.DOMove(currentObstacle.entryPos.position, 0.95f).SetEase(Ease.OutSine).OnComplete(() =>
+            {
+                transform.DOMove(currentObstacle.exitPos.position, 0.95f).SetEase(Ease.InQuad).OnComplete(() =>
+                {
+                    head.transform.DOLocalMoveZ(localPos.z, 0.1f);
+                    animator.SetFloat("MoveY", 0);
+                    animator.SetFloat("MoveX", 0);
+                    canLook = true;
+                    canMove = true;
+                });
+            });
+        }
+    }
+
+    public void ResetPosition()
+    {
+        controller.enabled = false;
+
+        transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0,0,0));
+        cameraHolderController.transform.GetChild(0).SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0, 0, 0));
+        cameraHolderController.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0, 0, 0));
+
+        velocity = Vector3.zero;
+
+        
+
+        bodysmr.enabled = true;
+        
+
+        StartCoroutine(OneMoreTime());
+    }
+
+    IEnumerator OneMoreTime()
+    {
+        yield return new WaitForSeconds(0.1f);
+        GameManager.instance.StartGame();
+        controller.enabled = true;
+        canMove = true;
+        canLook = true;
     }
 }

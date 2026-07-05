@@ -119,10 +119,14 @@ public class CameraRewind : MonoBehaviour
 
         isRecording = true;
         isRewinding = false;
+
+        ClearHistory();
     }
 
     public void ClearHistory()
     {
         history.Clear();
+        GameManager.instance.ResetPlayer();
     }
+
 }

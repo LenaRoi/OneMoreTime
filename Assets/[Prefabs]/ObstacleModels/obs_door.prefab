@@ -12,7 +12,8 @@ GameObject:
   - component: {fileID: 7772068513621104993}
   - component: {fileID: 8867503771338314449}
   - component: {fileID: 1952551152141672894}
-  m_Layer: 0
+  - component: {fileID: 9191218978214040310}
+  m_Layer: 9
   m_Name: obs_door
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -105,3 +106,16 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.2235999, y: 2.1032, z: 0.18090001}
   m_Center: {x: -0.59940004, y: 1.0495999, z: -0.0017500818}
+--- !u!114 &9191218978214040310
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7639402329047829981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c20e45af170b43d4cb0d338973c0fb83, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  isOpened: 0
