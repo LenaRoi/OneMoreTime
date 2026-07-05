@@ -2,12 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Neon spectrum equalizer that follows a curved wall. You place a few empty
-/// marker transforms along the wall (e.g. a corridor_bend's inner wall) and
-/// assign them to <see cref="pathPoints"/>; the bars are distributed evenly
-/// along the smooth (Catmull-Rom) curve through those markers, each oriented to
-/// the wall. Works for straight, bent, or S-shaped walls — you just trace it.
-/// Attach to an upright empty; drop the markers as children and assign them.
+/// Eğri duvarı takip eden neon spectrum equalizer. Marker'lardan geçen Catmull-Rom
+/// eğrisi boyunca sütunlar dizilir. Tüm bloklar TEK birleşik mesh olarak çizilir
+/// (panel başına 1 renderer). Segment yanıp sönmesini Custom/EqualizerBars shader'ı
+/// yönetir (script sadece _Levels'ı günceller). Mesh bir kez kurulur ve durur.
 /// </summary>
 public class AudioEqualizerCurved : MonoBehaviour
 {
@@ -52,7 +50,7 @@ public class AudioEqualizerCurved : MonoBehaviour
     [Range(0f, 0.5f)] public float noiseGate = 0.06f;
 
     [Header("Renk / Neon")]
-    [Tooltip("Blokların materyali. BUILD'de görünmesi için buraya bir materyal ata (kod içi Shader.Find build'de silinebilir). GameManager'daki materyali kullanabilirsin.")]
+    [Tooltip("(Artık kullanılmıyor — render Custom/EqualizerBars shader'ı ile yapılıyor.)")]
     public Material blockMaterial;
     [Range(0f, 0.8f)] public float shadeVariation = 0.35f;
     [Range(1f, 8f)] public float brightness = 2.2f;
@@ -61,7 +59,7 @@ public class AudioEqualizerCurved : MonoBehaviour
     [Range(0f, 0.4f)] public float unlitDim = 0.12f;
 
     [Header("Performans")]
-    [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez ve çizilmez (uzaktakiler FPS düşürmesin). 0 = hep aktif.")]
+    [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez/çizilmez. 0 = hep aktif.")]
     public float maxVisibleDistance = 40f;
 
     private AudioSource audioSource;
@@ -70,30 +68,65 @@ public class AudioEqualizerCurved : MonoBehaviour
     private float[] barPeak;
     private float[] rawMag;
     private float globalPeak;
-    private MeshRenderer[,] blocks;
-    private MaterialPropertyBlock mpb;
     private Color[] barColors;
-    private Material[] barMaterials;
-    private Transform grid;
+
+    private GameObject meshGO;
+    private MeshRenderer meshRenderer;
+    private Mesh mesh;
+    private MaterialPropertyBlock mpb;
+    private float[] _levels;
     private int builtBars, builtSegments;
-    private int[] prevLit;      // her sütunun bir önceki yanan blok sayısı (delta güncelleme)
     private Camera cam;
-    private bool culled;
+    private bool _warnedNoPath;
 
     // eğri örnekleme tamponları
     private readonly List<Vector3> _samples = new List<Vector3>();
     private readonly List<float> _cumLen = new List<float>();
     private float _totalLen;
 
-    static readonly int ColorID = Shader.PropertyToID("_Color");
-    static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
-    private int _colorProp = Shader.PropertyToID("_Color");
+    private static Material _sharedMat;
+    static readonly int LevelsID = Shader.PropertyToID("_Levels");
+    static readonly int BrightnessID = Shader.PropertyToID("_Brightness");
+    static readonly int UnlitDimID = Shader.PropertyToID("_UnlitDim");
+    static readonly int ShowUnlitID = Shader.PropertyToID("_ShowUnlit");
+
+    // Birim küp: 6 yüz × 4 köşe = 24 vertex (ışık için düz yüz normalleri). Sıra: +X,-X,+Y,-Y,+Z,-Z
+    static readonly Vector3[] FACE =
+    {
+        new Vector3( .5f,-.5f,-.5f), new Vector3( .5f, .5f,-.5f), new Vector3( .5f, .5f, .5f), new Vector3( .5f,-.5f, .5f), // +X
+        new Vector3(-.5f,-.5f, .5f), new Vector3(-.5f, .5f, .5f), new Vector3(-.5f, .5f,-.5f), new Vector3(-.5f,-.5f,-.5f), // -X
+        new Vector3(-.5f, .5f,-.5f), new Vector3(-.5f, .5f, .5f), new Vector3( .5f, .5f, .5f), new Vector3( .5f, .5f,-.5f), // +Y
+        new Vector3(-.5f,-.5f, .5f), new Vector3(-.5f,-.5f,-.5f), new Vector3( .5f,-.5f,-.5f), new Vector3( .5f,-.5f, .5f), // -Y
+        new Vector3( .5f,-.5f, .5f), new Vector3( .5f, .5f, .5f), new Vector3(-.5f, .5f, .5f), new Vector3(-.5f,-.5f, .5f), // +Z
+        new Vector3(-.5f,-.5f,-.5f), new Vector3(-.5f, .5f,-.5f), new Vector3( .5f, .5f,-.5f), new Vector3( .5f,-.5f,-.5f), // -Z
+    };
+    static readonly Vector3[] FNRM =
+    {
+        Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back,
+    };
+    static readonly int[] FACE_TRIS =
+    {
+        0,1,2, 0,2,3,      4,5,6, 4,6,7,      8,9,10, 8,10,11,
+        12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+    };
+
+    static Material SharedMat
+    {
+        get
+        {
+            if (_sharedMat == null)
+            {
+                var sh = Shader.Find("Custom/EqualizerBars");
+                _sharedMat = new Material(sh);
+            }
+            return _sharedMat;
+        }
+    }
 
     void Start()
     {
         if (useSharedAudio)
         {
-            // Bu objenin kendi AudioSource'u varsa sustur (yankının kaynağı bu)
             var src = GetComponent<AudioSource>();
             if (src != null) { src.playOnAwake = false; src.Stop(); src.enabled = false; }
         }
@@ -102,7 +135,7 @@ public class AudioEqualizerCurved : MonoBehaviour
             audioSource = GetComponent<AudioSource>();
         }
         mpb = new MaterialPropertyBlock();
-        Build();
+        // Mesh'i burada KURMUYORUZ — oyuncu yaklaşınca bir kez kur, sonra hep dursun.
     }
 
     [ContextMenu("Rebuild")]
@@ -113,25 +146,16 @@ public class AudioEqualizerCurved : MonoBehaviour
 
         if (pathPoints == null || pathPoints.Length < 2)
         {
-            Debug.LogWarning($"{name}: En az 2 path marker gerekli.", this);
+            if (!_warnedNoPath) { Debug.LogWarning($"{name}: En az 2 path marker gerekli.", this); _warnedNoPath = true; }
             return;
         }
-
-        grid = new GameObject("CurvedEqualizer").transform;
-        grid.SetParent(transform, false);
-#if UNITY_EDITOR
-        // Editörde önizleme için üretilen bloklar sahne dosyasını şişirmesin
-        if (!Application.isPlaying) grid.gameObject.hideFlags = HideFlags.DontSaveInEditor;
-#endif
 
         spectrum = new float[Mathf.Max(64, Mathf.NextPowerOfTwo(bars * 4))];
         level = new float[bars];
         barPeak = new float[bars];
         rawMag = new float[bars];
-        blocks = new MeshRenderer[bars, segments];
         barColors = new Color[bars];
-        barMaterials = new Material[bars];
-        prevLit = new int[bars];
+        _levels = new float[128];   // shader _Levels[128] ile aynı boyut
         if (mpb == null) mpb = new MaterialPropertyBlock();
 
         SampleCurve();
@@ -148,18 +172,21 @@ public class AudioEqualizerCurved : MonoBehaviour
         float radialOffset = surfaceOffset + thickness * 0.5f;
 
         Vector3 scale = new Vector3(blockW, blockH, thickness);
-        // Materyal ata (build'de görünür); yoksa Unlit/Color'a düş
-        Material template = blockMaterial != null ? blockMaterial : new Material(Shader.Find("Unlit/Color"));
-        _colorProp = template.HasProperty(BaseColorID) ? BaseColorID : ColorID;
+
+        int cubeCount = bars * segments;
+        var verts = new Vector3[cubeCount * 24];
+        var normals = new Vector3[cubeCount * 24];
+        var colors = new Color[cubeCount * 24];
+        var uvs = new Vector2[cubeCount * 24];
+        var tris = new int[cubeCount * 36];
+        int ci = 0;
 
         for (int b = 0; b < bars; b++)
         {
             float shadeT = bars <= 1 ? 1f : (float)b / (bars - 1);
             float shade = Mathf.Lerp(1f - shadeVariation, 1f, shadeT);
             barColors[b] = new Color(shade, shade, shade, 1f);
-            barMaterials[b] = new Material(template) { enableInstancing = true };
 
-            // Yol üzerinde bu sütunun konumu ve teğeti
             float dist = startLen + (b + 0.5f) * barPitch;
             Vector3 pos, tangent;
             EvaluateAt(dist, out pos, out tangent);
@@ -169,36 +196,88 @@ public class AudioEqualizerCurved : MonoBehaviour
             if (normal.sqrMagnitude < 1e-6f) normal = Vector3.forward * dir;
             Quaternion rot = Quaternion.LookRotation(normal, up);
 
-            Color cLit = barColors[b] * brightness;
-            Color cDim = barColors[b] * unlitDim;
-
             for (int s = 0; s < segments; s++)
             {
                 float uy = bottom + (s + 0.5f) * segPitch;
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = $"blk_{b}_{s}";
-                var col = go.GetComponent<Collider>();
-                if (col != null) DestroyImmediate(col);
-                go.transform.SetParent(grid, false);
-                go.transform.localPosition = pos + up * uy + normal * radialOffset;
-                go.transform.localRotation = rot;
-                go.transform.localScale = scale;
+                Vector3 center = pos + up * uy + normal * radialOffset;
 
-                var mr = go.GetComponent<MeshRenderer>();
-                mr.sharedMaterial = barMaterials[b];
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-                // Başlangıç: sönük. Yanan renk sabit olduğundan bir kez ayarlanır;
-                // çalışırken sadece açık/kapalı değişir (her kare SetPropertyBlock yok).
-                if (showUnlit) { mpb.SetColor(_colorProp, cDim); mr.SetPropertyBlock(mpb); }
-                else { mpb.SetColor(_colorProp, cLit); mr.SetPropertyBlock(mpb); mr.enabled = false; }
-                blocks[b, s] = mr;
+                int vBase = ci * 24;
+                for (int f = 0; f < 6; f++)
+                {
+                    Vector3 nrm = rot * FNRM[f];
+                    for (int c = 0; c < 4; c++)
+                    {
+                        int idx = vBase + f * 4 + c;
+                        verts[idx] = center + rot * Vector3.Scale(FACE[f * 4 + c], scale);
+                        normals[idx] = nrm;
+                        colors[idx] = barColors[b];
+                        uvs[idx] = new Vector2(b, s);
+                    }
+                }
+                int tBase = ci * 36;
+                for (int k = 0; k < 36; k++)
+                    tris[tBase + k] = vBase + FACE_TRIS[k];
+
+                ci++;
             }
-            prevLit[b] = 0;
         }
+
+        mesh = new Mesh { name = "CurvedEqualizerMesh" };
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;   // çok vertex olabilir
+        mesh.vertices = verts;
+        mesh.normals = normals;      // sahne ışığı için gerekli
+        mesh.colors = colors;
+        mesh.uv = uvs;
+        mesh.triangles = tris;
+        mesh.RecalculateBounds();
+
+        meshGO = new GameObject("CurvedEqualizer");
+        meshGO.transform.SetParent(transform, false);
+#if UNITY_EDITOR
+        if (!Application.isPlaying) meshGO.hideFlags = HideFlags.DontSaveInEditor;
+#endif
+        var mf = meshGO.AddComponent<MeshFilter>();
+        mf.sharedMesh = mesh;
+        meshRenderer = meshGO.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = SharedMat;
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+
+        // Play modunda sönük başla; editör önizlemesinde panel görünür olsun diye dolu.
+        float initLevel = Application.isPlaying ? 0f : segments;
+        for (int b = 0; b < bars; b++) _levels[b] = initLevel;
+
+        mpb.SetFloat(BrightnessID, brightness);
+        mpb.SetFloat(UnlitDimID, unlitDim);
+        mpb.SetFloat(ShowUnlitID, showUnlit ? 1f : 0f);
+        mpb.SetFloatArray(LevelsID, _levels);
+        meshRenderer.SetPropertyBlock(mpb);
 
         builtBars = bars;
         builtSegments = segments;
+    }
+
+    void Teardown()
+    {
+        if (meshGO != null) SafeDestroy(meshGO);
+        if (mesh != null) SafeDestroy(mesh);
+        meshGO = null;
+        meshRenderer = null;
+        mesh = null;
+        builtBars = builtSegments = 0;
+    }
+
+    void OnDisable()
+    {
+        if (meshGO != null) Teardown();
+    }
+
+    // Edit modunda Destroy hata verir; oynatmıyorsak DestroyImmediate kullan.
+    static void SafeDestroy(Object o)
+    {
+        if (o == null) return;
+        if (Application.isPlaying) Destroy(o);
+        else DestroyImmediate(o);
     }
 
     // Marker'lardan geçen Catmull-Rom eğrisini yoğun örnekle, yay uzunluğunu çıkar
@@ -267,27 +346,28 @@ public class AudioEqualizerCurved : MonoBehaviour
 
     void Update()
     {
-        if (blocks == null || builtBars != bars || builtSegments != segments)
-        {
-            Build();
-            if (blocks == null) return;
-        }
-
-        // Uzaktaki equalizer'ları güncelleme/çizme (FPS için)
+        // Mesafe kapısı: uzaktakiler gizlenir (mesh YIKILMAZ → tekrar yaklaşınca anında gelir).
         if (maxVisibleDistance > 0f)
         {
             if (cam == null) cam = Camera.main;
             if (cam != null)
             {
-                float md = maxVisibleDistance;
+                float md = maxVisibleDistance * 1.35f;
                 if ((cam.transform.position - transform.position).sqrMagnitude > md * md)
                 {
-                    if (!culled) { culled = true; if (grid) grid.gameObject.SetActive(false); }
+                    if (meshGO != null && meshGO.activeSelf) meshGO.SetActive(false);
                     return;
                 }
-                if (culled) { culled = false; if (grid) grid.gameObject.SetActive(true); }
             }
         }
+
+        if (meshGO == null || builtBars != bars || builtSegments != segments)
+        {
+            if (pathPoints == null || pathPoints.Length < 2) return;   // build spam'ini önle
+            Build();
+            if (meshGO == null) return;
+        }
+        if (meshGO != null && !meshGO.activeSelf) meshGO.SetActive(true);
 
         float[] spec = GetSpectrum();
         float fall = Mathf.Exp(-Time.deltaTime * balanceFalloff);
@@ -318,34 +398,14 @@ public class AudioEqualizerCurved : MonoBehaviour
             float rate = (target > level[b] ? attack : decay) * Time.deltaTime;
             level[b] = Mathf.Lerp(level[b], target, rate);
 
-            // Sadece DURUMU DEĞİŞEN blokları güncelle (her kare hepsini değil)
-            int lit = Mathf.RoundToInt(level[b] * segments);
-            int prev = prevLit[b];
-            if (lit != prev)
-            {
-                if (lit > prev)
-                {
-                    Color c = barColors[b] * brightness;
-                    for (int s = prev; s < lit; s++)
-                    {
-                        var mr = blocks[b, s];
-                        if (showUnlit) { mpb.SetColor(_colorProp, c); mr.SetPropertyBlock(mpb); }
-                        else mr.enabled = true;
-                    }
-                }
-                else
-                {
-                    Color dim = barColors[b] * unlitDim;
-                    for (int s = lit; s < prev; s++)
-                    {
-                        var mr = blocks[b, s];
-                        if (showUnlit) { mpb.SetColor(_colorProp, dim); mr.SetPropertyBlock(mpb); }
-                        else mr.enabled = false;
-                    }
-                }
-                prevLit[b] = lit;
-            }
+            _levels[b] = Mathf.RoundToInt(level[b] * segments);
         }
+
+        mpb.SetFloatArray(LevelsID, _levels);
+        mpb.SetFloat(BrightnessID, brightness);
+        mpb.SetFloat(UnlitDimID, unlitDim);
+        mpb.SetFloat(ShowUnlitID, showUnlit ? 1f : 0f);
+        meshRenderer.SetPropertyBlock(mpb);
     }
 
     // Editörde bar'ların izleyeceği GERÇEK eğriyi (pürüzsüz) çiz

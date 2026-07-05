@@ -18,6 +18,8 @@ public class GameManager : MonoBehaviour
     public MusicPlayer musicPlayer;
     [Tooltip("Deadloop sonrası 1sn bulanık->net açılış. Boşsa sahnede/Main Camera'da aranır.")]
     public ScreenBlurFade blurFade;
+    [Tooltip("Deadloop (rewind) animasyonu OYNARKEN çalacak müzik. Buraya deadloop.mp3'lü bir AudioSource sürükle (Play On Awake KAPALI, Loop tercihen KAPALI).")]
+    public AudioSource deadloopMusic;
 
     public bool gameOver = false;
 
@@ -59,6 +61,10 @@ public class GameManager : MonoBehaviour
         playerMovement.canMove = false;
         playerMovement.canLook = false;
         playerMovement.bodysmr.enabled = false;
+
+        // Deadloop animasyonu OYNARKEN deadloop müziğini baştan çal.
+        if (deadloopMusic != null) { deadloopMusic.Stop(); deadloopMusic.Play(); }
+
         rewing.StartRewind();
     }
 
@@ -75,6 +81,9 @@ public class GameManager : MonoBehaviour
         }
         isResetting = false;
         score = 1;
+
+        // Deadloop animasyonu bitti → deadloop müziğini durdur.
+        if (deadloopMusic != null) deadloopMusic.Stop();
 
         // Deadloop (ölüm) animasyonu bittikten sonra müziği loopStartTime'dan (30sn) başlat.
         // Referansı sağlamlaştır: önce Inspector alanı, sonra gameMusic objesi, en son sahnede ara.

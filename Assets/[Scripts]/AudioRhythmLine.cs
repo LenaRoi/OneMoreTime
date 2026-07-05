@@ -1,13 +1,12 @@
 using UnityEngine;
 
 /// <summary>
-/// Neon spectrum equalizer panel. Builds a grid of little cube blocks in the
-/// LOCAL space of this transform (right = local X, up = local Y, blocks extrude
-/// along local Z). Each column is a frequency band; stacked segments light up
-/// with the music (rainbow), like a classic equalizer. Attach to an empty child
-/// placed flat against a wall (e.g. a corridor tile's left wall): set the panel
-/// width/height to the wall area and rotate the transform so local Z faces into
-/// the room.
+/// Neon spectrum equalizer panel. Tüm bloklar TEK birleşik mesh olarak çizilir
+/// (panel başına 1 renderer, 1 draw call) — yüzlerce küp GameObject yerine.
+/// Segmentlerin yanıp sönmesini Custom/EqualizerBars shader'ı yönetir: script her
+/// kare sadece sütun başına "yanan segment sayısı"nı (_Levels) MaterialPropertyBlock
+/// ile verir. Mesh bir kez kurulur ve durur; Unity'nin kendi frustum culling'i
+/// görünmeyenleri bedavaya eler (pop-in yok). Bir duvara dik boş child'a ekle.
 /// </summary>
 public class AudioRhythmLine : MonoBehaviour
 {
@@ -61,7 +60,7 @@ public class AudioRhythmLine : MonoBehaviour
     [Range(0f, 0.5f)] public float noiseGate = 0.06f;
 
     [Header("Renk / Neon")]
-    [Tooltip("Blokların materyali. BUILD'de görünmesi için buraya bir materyal ata (kod içi Shader.Find build'de silinebilir). GameManager'daki materyali kullanabilirsin.")]
+    [Tooltip("(Artık kullanılmıyor — render Custom/EqualizerBars shader'ı ile yapılıyor.)")]
     public Material blockMaterial;
     [Tooltip("Beyaz tonları arası fark (0 = hepsi saf beyaz, yüksek = bazı sütunlar daha gri).")]
     [Range(0f, 0.8f)] public float shadeVariation = 0.35f;
@@ -72,7 +71,7 @@ public class AudioRhythmLine : MonoBehaviour
     [Range(0f, 0.4f)] public float unlitDim = 0.12f;
 
     [Header("Performans")]
-    [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez ve çizilmez (uzaktakiler FPS düşürmesin). 0 = hep aktif.")]
+    [Tooltip("Kameraya bu mesafeden uzaktayken güncellenmez/çizilmez. 0 = hep aktif. (Yakındakiler zaten Unity tarafından frustum ile elenir.)")]
     public float maxVisibleDistance = 12f;
 
     private AudioSource audioSource;
@@ -81,19 +80,55 @@ public class AudioRhythmLine : MonoBehaviour
     private float[] barPeak;       // her sütunun son zirvesi (otomatik kazanç)
     private float[] rawMag;        // her sütunun ham büyüklüğü (bu kare)
     private float globalPeak;      // tüm bantların en gür zirvesi
-    private MeshRenderer[,] blocks;
-    private MaterialPropertyBlock mpb;
     private Color[] barColors;
-    private Material[] barMaterials;
-    private Transform grid;
-    private int builtBars, builtSegments;
-    private int[] prevLit;      // her sütunun bir önceki yanan blok sayısı (delta güncelleme)
-    private Camera cam;
-    private bool culled;
 
-    static readonly int ColorID = Shader.PropertyToID("_Color");
-    static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
-    private int _colorProp = Shader.PropertyToID("_Color");
+    private GameObject meshGO;
+    private MeshRenderer meshRenderer;
+    private Mesh mesh;
+    private MaterialPropertyBlock mpb;
+    private float[] _levels;       // shader'a giden: sütun başına yanan segment sayısı
+    private int builtBars, builtSegments;
+    private Camera cam;
+
+    private static Material _sharedMat;
+    static readonly int LevelsID = Shader.PropertyToID("_Levels");
+    static readonly int BrightnessID = Shader.PropertyToID("_Brightness");
+    static readonly int UnlitDimID = Shader.PropertyToID("_UnlitDim");
+    static readonly int ShowUnlitID = Shader.PropertyToID("_ShowUnlit");
+
+    // Birim küp: 6 yüz × 4 köşe = 24 vertex (ışık için düz yüz normalleri gerekli).
+    // Sıra: +X, -X, +Y, -Y, +Z, -Z
+    static readonly Vector3[] FACE =
+    {
+        new Vector3( .5f,-.5f,-.5f), new Vector3( .5f, .5f,-.5f), new Vector3( .5f, .5f, .5f), new Vector3( .5f,-.5f, .5f), // +X
+        new Vector3(-.5f,-.5f, .5f), new Vector3(-.5f, .5f, .5f), new Vector3(-.5f, .5f,-.5f), new Vector3(-.5f,-.5f,-.5f), // -X
+        new Vector3(-.5f, .5f,-.5f), new Vector3(-.5f, .5f, .5f), new Vector3( .5f, .5f, .5f), new Vector3( .5f, .5f,-.5f), // +Y
+        new Vector3(-.5f,-.5f, .5f), new Vector3(-.5f,-.5f,-.5f), new Vector3( .5f,-.5f,-.5f), new Vector3( .5f,-.5f, .5f), // -Y
+        new Vector3( .5f,-.5f, .5f), new Vector3( .5f, .5f, .5f), new Vector3(-.5f, .5f, .5f), new Vector3(-.5f,-.5f, .5f), // +Z
+        new Vector3(-.5f,-.5f,-.5f), new Vector3(-.5f, .5f,-.5f), new Vector3( .5f, .5f,-.5f), new Vector3( .5f,-.5f,-.5f), // -Z
+    };
+    static readonly Vector3[] FNRM =
+    {
+        Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back,
+    };
+    static readonly int[] FACE_TRIS =
+    {
+        0,1,2, 0,2,3,      4,5,6, 4,6,7,      8,9,10, 8,10,11,
+        12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+    };
+
+    static Material SharedMat
+    {
+        get
+        {
+            if (_sharedMat == null)
+            {
+                var sh = Shader.Find("Custom/EqualizerBars");
+                _sharedMat = new Material(sh);
+            }
+            return _sharedMat;
+        }
+    }
 
     void Start()
     {
@@ -107,8 +142,7 @@ public class AudioRhythmLine : MonoBehaviour
             audioSource = GetComponent<AudioSource>();
         }
         mpb = new MaterialPropertyBlock();
-        // NOT: Izgarayı burada KURMUYORUZ. Yüzlerce equalizer × 512 küp = onbinlerce
-        // obje demek. Bunun yerine oyuncu yaklaşınca kur, uzaklaşınca TAMAMEN yık.
+        // Mesh'i burada KURMUYORUZ — oyuncu yaklaşınca bir kez kur, sonra hep dursun.
     }
 
     // Ortak (paylaşılan) veya kendi AudioSource'undan spektrum
@@ -123,21 +157,15 @@ public class AudioRhythmLine : MonoBehaviour
 
     void Build()
     {
-        // Eski ızgarayı temizle
         var old = transform.Find("Equalizer");
         if (old != null) DestroyImmediate(old.gameObject);
-
-        grid = new GameObject("Equalizer").transform;
-        grid.SetParent(transform, false);
 
         spectrum = new float[Mathf.Max(64, Mathf.NextPowerOfTwo(bars * 4))];
         level = new float[bars];
         barPeak = new float[bars];
         rawMag = new float[bars];
-        blocks = new MeshRenderer[bars, segments];
         barColors = new Color[bars];
-        barMaterials = new Material[bars];
-        prevLit = new int[bars];
+        _levels = new float[128];   // shader _Levels[128] ile aynı boyut
         if (mpb == null) mpb = new MaterialPropertyBlock();
 
         float dir = faceForward ? 1f : -1f;
@@ -150,27 +178,26 @@ public class AudioRhythmLine : MonoBehaviour
         float bottom = verticalAnchor == VerticalAnchor.Bottom ? 0f : -height * 0.5f;
         float radialOffset = surfaceOffset + thickness * 0.5f;
 
-        // Eğrilik: sütunlar Y ekseni etrafında bir yay boyunca dizilir.
-        // width = yay uzunluğu; bendAngle toplam açı. 0 ise düz.
         float bendRad = bendAngle * Mathf.Deg2Rad;
         bool bent = Mathf.Abs(bendRad) > 1e-4f;
         float radius = bent ? width / bendRad : 0f;
 
         Vector3 scale = new Vector3(blockW, blockH, thickness);
-        // Materyal ata (build'de görünür); yoksa Unlit/Color'a düş
-        Material template = blockMaterial != null ? blockMaterial : new Material(Shader.Find("Unlit/Color"));
-        _colorProp = template.HasProperty(BaseColorID) ? BaseColorID : ColorID;
+
+        int cubeCount = bars * segments;
+        var verts = new Vector3[cubeCount * 24];
+        var normals = new Vector3[cubeCount * 24];
+        var colors = new Color[cubeCount * 24];
+        var uvs = new Vector2[cubeCount * 24];
+        var tris = new int[cubeCount * 36];
+        int ci = 0;
 
         for (int b = 0; b < bars; b++)
         {
-            // Beyazın tonları: sütunlar arası hafif gri-beyaz değişim
             float t = bars <= 1 ? 1f : (float)b / (bars - 1);
             float shade = Mathf.Lerp(1f - shadeVariation, 1f, t);
             barColors[b] = new Color(shade, shade, shade, 1f);
-            // Sütun başına TEK materyal (blok başına değil) → çok daha az materyal
-            barMaterials[b] = new Material(template) { enableInstancing = true };
 
-            // Bu sütunun yay üzerindeki konumu ve dönüşü
             float frac = (b + 0.5f) / bars;
             Vector3 barPos;
             Quaternion barRot;
@@ -185,110 +212,100 @@ public class AudioRhythmLine : MonoBehaviour
                 barPos = new Vector3((frac - 0.5f) * width, 0f, 0f);
                 barRot = Quaternion.identity;
             }
-            // Blokların dışarı (radyal) çıkış yönü
             Vector3 normalDir = barRot * Vector3.forward * dir;
-
-            Color cLit = barColors[b] * brightness;
-            Color cDim = barColors[b] * unlitDim;
 
             for (int s = 0; s < segments; s++)
             {
                 float uy = bottom + (s + 0.5f) * segPitch;
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = $"blk_{b}_{s}";
-                var col = go.GetComponent<Collider>();
-                if (col != null) DestroyImmediate(col);
-                go.transform.SetParent(grid, false);
-                go.transform.localPosition = barPos + Vector3.up * uy + normalDir * radialOffset;
-                go.transform.localRotation = barRot;
-                go.transform.localScale = scale;
+                Vector3 center = barPos + Vector3.up * uy + normalDir * radialOffset;
 
-                var mr = go.GetComponent<MeshRenderer>();
-                mr.sharedMaterial = barMaterials[b];
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-                // Başlangıç durumu: hepsi "sönük". Yanan renk sabit olduğundan bir
-                // kez ayarlanır; çalışırken sadece açık/kapalı değişir (SetPropertyBlock yok).
-                if (showUnlit) { mpb.SetColor(_colorProp, cDim); mr.SetPropertyBlock(mpb); }
-                else { mpb.SetColor(_colorProp, cLit); mr.SetPropertyBlock(mpb); mr.enabled = false; }
-                blocks[b, s] = mr;
+                int vBase = ci * 24;
+                for (int f = 0; f < 6; f++)
+                {
+                    Vector3 n = barRot * FNRM[f];
+                    for (int c = 0; c < 4; c++)
+                    {
+                        int idx = vBase + f * 4 + c;
+                        verts[idx] = center + barRot * Vector3.Scale(FACE[f * 4 + c], scale);
+                        normals[idx] = n;
+                        colors[idx] = barColors[b];
+                        uvs[idx] = new Vector2(b, s);   // shader: bar & segment index
+                    }
+                }
+                int tBase = ci * 36;
+                for (int k = 0; k < 36; k++)
+                    tris[tBase + k] = vBase + FACE_TRIS[k];
+
+                ci++;
             }
-            prevLit[b] = 0;
         }
+
+        mesh = new Mesh { name = "EqualizerMesh" };
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;   // çok vertex olabilir
+        mesh.vertices = verts;
+        mesh.normals = normals;      // sahne ışığı için gerekli
+        mesh.colors = colors;
+        mesh.uv = uvs;
+        mesh.triangles = tris;
+        mesh.RecalculateBounds();
+
+        meshGO = new GameObject("Equalizer");
+        meshGO.transform.SetParent(transform, false);
+        var mf = meshGO.AddComponent<MeshFilter>();
+        mf.sharedMesh = mesh;
+        meshRenderer = meshGO.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = SharedMat;
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+
+        // Sabit ayarları mpb'ye bir kez yaz (level'lar her kare güncellenir).
+        mpb.SetFloat(BrightnessID, brightness);
+        mpb.SetFloat(UnlitDimID, unlitDim);
+        mpb.SetFloat(ShowUnlitID, showUnlit ? 1f : 0f);
+        mpb.SetFloatArray(LevelsID, _levels);
+        meshRenderer.SetPropertyBlock(mpb);
 
         builtBars = bars;
         builtSegments = segments;
     }
 
-    // Küpleri ve runtime materyalleri TAMAMEN yok et (uzaklaşınca çağrılır).
     void Teardown()
     {
-        if (barMaterials != null)
-            for (int i = 0; i < barMaterials.Length; i++)
-                if (barMaterials[i] != null) Destroy(barMaterials[i]);
-
-        if (grid != null) Destroy(grid.gameObject);
-        grid = null;
-        blocks = null;
-        barMaterials = null;
-        prevLit = null;
+        if (meshGO != null) Destroy(meshGO);
+        if (mesh != null) Destroy(mesh);
+        meshGO = null;
+        meshRenderer = null;
+        mesh = null;
         builtBars = builtSegments = 0;
-        culled = false;
     }
 
     void OnDisable()
     {
-        // Sahne/obje kapanırken sızıntı olmasın.
-        if (blocks != null) Teardown();
+        if (meshGO != null) Teardown();
     }
 
     void Update()
     {
-        // --- Mesafeye göre TEMBEL KURULUM / TAM YIKIM (asıl FPS kazancı burada) ---
-        // Uzaktaki equalizer'lar sadece gizlenmez, küpleri komple yok edilir; böylece
-        // oyuncu ileri gidince arkadaki onbinlerce küp bellekten/CPU'dan tamamen kalkar.
+        // Mesafe kapısı: uzaktakiler için ne mesh çiz ne de spektrum hesapla.
+        // (Mesh YIKILMAZ; sadece gizlenir → tekrar yaklaşınca ANINDA gelir, pop-in yok.)
         if (maxVisibleDistance > 0f)
         {
             if (cam == null) cam = Camera.main;
             if (cam != null)
             {
-                Vector3 toObj = transform.position - cam.transform.position;
-                float sqrDist = toObj.sqrMagnitude;
-                float md = maxVisibleDistance;
-
-                // 1) Çok uzak → yık. (histerezis: yapım menzilinin 1.35 katı)
-                float tearDist = md * 1.35f;
-                if (sqrDist > tearDist * tearDist)
+                float md = maxVisibleDistance * 1.35f;
+                if ((cam.transform.position - transform.position).sqrMagnitude > md * md)
                 {
-                    if (blocks != null) Teardown();
+                    if (meshGO != null && meshGO.activeSelf) meshGO.SetActive(false);
                     return;
                 }
-
-                // 2) Kameranın ARKASINDA olanları kurma. Duvardaki bar'ları arkanı
-                //    dönmüşken çizmenin anlamı yok — koridorda yükün yarısı bu.
-                //    Çok yakındakiler (alwaysKeep) yönden bağımsız hep dursun ki
-                //    dönerken kenardaki bar aniden kaybolmasın.
-                const float alwaysKeep = 8f;
-                if (sqrDist > alwaysKeep * alwaysKeep)
-                {
-                    float facing = Vector3.Dot(toObj.normalized, cam.transform.forward);
-                    if (facing < -0.15f)   // belirgin şekilde arkada
-                    {
-                        if (blocks != null) Teardown();
-                        return;
-                    }
-                }
-
-                // 3) Menzilde ve önde → kurulmadıysa kur.
-                if (blocks == null) Build();
             }
         }
 
-        if (blocks == null || builtBars != bars || builtSegments != segments)
-            Build();
+        if (meshGO == null || builtBars != bars || builtSegments != segments) Build();
+        if (meshGO != null && !meshGO.activeSelf) meshGO.SetActive(true);
 
         float[] spec = GetSpectrum();
-
         float fall = Mathf.Exp(-Time.deltaTime * balanceFalloff);
 
         // 1. GEÇİŞ: her bandın ham gücü + zirve takibi + en gür bandın zirvesi
@@ -308,7 +325,7 @@ public class AudioRhythmLine : MonoBehaviour
         }
         float gp = Mathf.Max(globalPeak, 1e-6f);
 
-        // 2. GEÇİŞ: dengeli seviye + gürültü kapısı + blokları güncelle
+        // 2. GEÇİŞ: dengeli seviye → sütun başına yanan segment sayısı (_Levels)
         for (int b = 0; b < bars; b++)
         {
             float absolute = Mathf.Clamp01(rawMag[b] * sensitivity);
@@ -319,33 +336,14 @@ public class AudioRhythmLine : MonoBehaviour
             float rate = (target > level[b] ? attack : decay) * Time.deltaTime;
             level[b] = Mathf.Lerp(level[b], target, rate);
 
-            // Sadece DURUMU DEĞİŞEN blokları güncelle (her kare hepsini değil)
-            int lit = Mathf.RoundToInt(level[b] * segments);
-            int prev = prevLit[b];
-            if (lit != prev)
-            {
-                if (lit > prev)
-                {
-                    Color c = barColors[b] * brightness;
-                    for (int s = prev; s < lit; s++)
-                    {
-                        var mr = blocks[b, s];
-                        if (showUnlit) { mpb.SetColor(_colorProp, c); mr.SetPropertyBlock(mpb); }
-                        else mr.enabled = true;
-                    }
-                }
-                else
-                {
-                    Color dim = barColors[b] * unlitDim;
-                    for (int s = lit; s < prev; s++)
-                    {
-                        var mr = blocks[b, s];
-                        if (showUnlit) { mpb.SetColor(_colorProp, dim); mr.SetPropertyBlock(mpb); }
-                        else mr.enabled = false;
-                    }
-                }
-                prevLit[b] = lit;
-            }
+            _levels[b] = Mathf.RoundToInt(level[b] * segments);
         }
+
+        // Tek çağrı: shader tüm segmentleri _Levels'a göre yakar/söndürür.
+        mpb.SetFloatArray(LevelsID, _levels);
+        mpb.SetFloat(BrightnessID, brightness);
+        mpb.SetFloat(UnlitDimID, unlitDim);
+        mpb.SetFloat(ShowUnlitID, showUnlit ? 1f : 0f);
+        meshRenderer.SetPropertyBlock(mpb);
     }
 }
