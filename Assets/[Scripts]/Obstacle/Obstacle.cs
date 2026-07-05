@@ -9,4 +9,6 @@ public class Obstacle : MonoBehaviour
 
     public Transform entryPos;
     public Transform exitPos;
+
+    public int buttonIndex;
 }

@@ -58,24 +58,34 @@ public class CameraHolderController : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit, 2f, obstacleLayer))
         {
-            Debug.Log(hit.transform.gameObject);
-            movement.targetObstacle = hit.transform.gameObject.GetComponent<Obstacle>();
+            if (movement.targetObstacle != hit.transform.gameObject.GetComponent<Obstacle>())
+            {
+                movement.targetObstacle = hit.transform.gameObject.GetComponent<Obstacle>();
+                UIManager.instance.OpenButton(movement.targetObstacle.buttonIndex);
+            }
+            
         }
         else
         {
             movement.targetObstacle = null;
+            UIManager.instance.CloseButton();
         }
 
         Ray ray2 = new Ray(transform.position, transform.forward);
 
         if (Physics.Raycast(ray2, out RaycastHit hit2, 2f, doorLayer))
         {
-            Debug.Log(hit2.transform.gameObject);
-            movement.targetDoor = hit2.transform.gameObject.GetComponent<Door>();
+            if (movement.targetDoor != hit2.transform.gameObject.GetComponent<Door>())
+            {
+                movement.targetDoor = hit2.transform.gameObject.GetComponent<Door>();
+                UIManager.instance.OpenButton(2);
+            }
+            
         }
         else
         {
             movement.targetDoor = null;
+            UIManager.instance.CloseButton();
         }
         // 1. FARE GİRDİLERİNİ ALMA
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;

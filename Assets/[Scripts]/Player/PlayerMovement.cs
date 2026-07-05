@@ -94,10 +94,13 @@ public class PlayerMovement : MonoBehaviour
     }
     public void Jump()
     {
+        UIManager.instance.CloseButton();
         velocity = Vector3.zero;
         canMove = false;
         Obstacle currentObstacle = targetObstacle;
         obstacleIndex = currentObstacle.index;
+
+        currentObstacle.GetComponent<Collider>().enabled = false;
 
         if (!currentObstacle.fakeObstacle)
         {
