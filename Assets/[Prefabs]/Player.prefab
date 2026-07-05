@@ -1406,7 +1406,7 @@ MonoBehaviour:
   canMove: 1
   canLook: 1
   cameraHolderController: {fileID: 0}
-  moveSpeed: 5
+  moveSpeed: 7
   gravity: -9.81
   jumpHeight: 0.5
   groundCheck: {fileID: 8962378284726919663}
