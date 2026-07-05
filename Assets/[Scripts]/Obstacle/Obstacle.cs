@@ -11,4 +11,9 @@ public class Obstacle : MonoBehaviour
     public Transform exitPos;
 
     public int buttonIndex;
+
+    private void Start()
+    {
+        GameManager.instance.allObstacles.Add(this);
+    }
 }

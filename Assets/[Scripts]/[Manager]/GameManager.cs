@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unity.VisualScripting;
+using UnityEditor;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
@@ -28,6 +29,7 @@ public class GameManager : MonoBehaviour
     public PlayerMovement playerMovement;
 
     public List<ButtonOpener> buttonOpeners;
+    public List<Obstacle> allObstacles;
 
     private void Update()
     {
@@ -82,6 +84,11 @@ public class GameManager : MonoBehaviour
             musicPlayer.RestartFromLoop();
         else
             Debug.LogWarning("GameManager: Sahnede MusicPlayer bulunamadı; deadloop sonrası müzik 30sn'den başlatılamadı.", this);
+
+        for (int i = 0; i < allObstacles.Count; i++)
+        {
+            allObstacles[i].GetComponent<Collider>().enabled = true;
+        }
 
     }
 
