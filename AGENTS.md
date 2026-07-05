@@ -2,7 +2,7 @@
 - Project name: OneMoreTime
 - Unity version: Unity 2022.3.62f3
 - Active game object:
-  - Name: ObstacleBigJump
+  - Name: corridor_straight (20)
   - Tag: Untagged
-  - Layer: Obstacle
+  - Layer: Default
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->

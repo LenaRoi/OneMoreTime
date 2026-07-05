@@ -243,5 +243,6 @@ public class PlayerMovement : MonoBehaviour
     public void GetHead()
     {
         headsmr.shadowCastingMode = ShadowCastingMode.On;
+        animator.SetTrigger("HipHop");
     }
 }
