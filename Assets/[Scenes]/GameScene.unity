@@ -939,6 +939,8 @@ MonoBehaviour:
   maxDuration: 3.5
   rewindUnitsPerSecond: 25
   ease: 1
+  blurLeadTime: 0.3
+  blurFocusOut: 1
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
