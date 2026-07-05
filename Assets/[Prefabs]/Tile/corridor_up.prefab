@@ -67,7 +67,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &1027817038117717042
 GameObject:
   m_ObjectHideFlags: 0
@@ -135,7 +135,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &1482886483122432473
 GameObject:
   m_ObjectHideFlags: 0
@@ -319,7 +319,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &3162223589927960348
 GameObject:
   m_ObjectHideFlags: 0
@@ -470,7 +470,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &6243297975660720520
 GameObject:
   m_ObjectHideFlags: 0
@@ -621,7 +621,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &8973491564467767171
 GameObject:
   m_ObjectHideFlags: 0
@@ -689,7 +689,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1001 &2525625126831285210
 PrefabInstance:
   m_ObjectHideFlags: 0

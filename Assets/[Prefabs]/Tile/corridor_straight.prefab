@@ -164,7 +164,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1 &3210819004672204778
 GameObject:
   m_ObjectHideFlags: 0
@@ -619,7 +619,7 @@ MonoBehaviour:
   brightness: 1
   showUnlit: 0
   unlitDim: 0.12
-  maxVisibleDistance: 40
+  maxVisibleDistance: 22
 --- !u!1001 &8281439610322288575
 PrefabInstance:
   m_ObjectHideFlags: 0

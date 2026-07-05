@@ -107,7 +107,8 @@ public class AudioRhythmLine : MonoBehaviour
             audioSource = GetComponent<AudioSource>();
         }
         mpb = new MaterialPropertyBlock();
-        Build();
+        // NOT: Izgarayı burada KURMUYORUZ. Yüzlerce equalizer × 512 küp = onbinlerce
+        // obje demek. Bunun yerine oyuncu yaklaşınca kur, uzaklaşınca TAMAMEN yık.
     }
 
     // Ortak (paylaşılan) veya kendi AudioSource'undan spektrum
@@ -219,26 +220,72 @@ public class AudioRhythmLine : MonoBehaviour
         builtSegments = segments;
     }
 
+    // Küpleri ve runtime materyalleri TAMAMEN yok et (uzaklaşınca çağrılır).
+    void Teardown()
+    {
+        if (barMaterials != null)
+            for (int i = 0; i < barMaterials.Length; i++)
+                if (barMaterials[i] != null) Destroy(barMaterials[i]);
+
+        if (grid != null) Destroy(grid.gameObject);
+        grid = null;
+        blocks = null;
+        barMaterials = null;
+        prevLit = null;
+        builtBars = builtSegments = 0;
+        culled = false;
+    }
+
+    void OnDisable()
+    {
+        // Sahne/obje kapanırken sızıntı olmasın.
+        if (blocks != null) Teardown();
+    }
+
     void Update()
     {
-        if (blocks == null || builtBars != bars || builtSegments != segments)
-            Build();
-
-        // Uzaktaki equalizer'ları güncelleme/çizme (FPS için)
+        // --- Mesafeye göre TEMBEL KURULUM / TAM YIKIM (asıl FPS kazancı burada) ---
+        // Uzaktaki equalizer'lar sadece gizlenmez, küpleri komple yok edilir; böylece
+        // oyuncu ileri gidince arkadaki onbinlerce küp bellekten/CPU'dan tamamen kalkar.
         if (maxVisibleDistance > 0f)
         {
             if (cam == null) cam = Camera.main;
             if (cam != null)
             {
+                Vector3 toObj = transform.position - cam.transform.position;
+                float sqrDist = toObj.sqrMagnitude;
                 float md = maxVisibleDistance;
-                if ((cam.transform.position - transform.position).sqrMagnitude > md * md)
+
+                // 1) Çok uzak → yık. (histerezis: yapım menzilinin 1.35 katı)
+                float tearDist = md * 1.35f;
+                if (sqrDist > tearDist * tearDist)
                 {
-                    if (!culled) { culled = true; if (grid) grid.gameObject.SetActive(false); }
+                    if (blocks != null) Teardown();
                     return;
                 }
-                if (culled) { culled = false; if (grid) grid.gameObject.SetActive(true); }
+
+                // 2) Kameranın ARKASINDA olanları kurma. Duvardaki bar'ları arkanı
+                //    dönmüşken çizmenin anlamı yok — koridorda yükün yarısı bu.
+                //    Çok yakındakiler (alwaysKeep) yönden bağımsız hep dursun ki
+                //    dönerken kenardaki bar aniden kaybolmasın.
+                const float alwaysKeep = 8f;
+                if (sqrDist > alwaysKeep * alwaysKeep)
+                {
+                    float facing = Vector3.Dot(toObj.normalized, cam.transform.forward);
+                    if (facing < -0.15f)   // belirgin şekilde arkada
+                    {
+                        if (blocks != null) Teardown();
+                        return;
+                    }
+                }
+
+                // 3) Menzilde ve önde → kurulmadıysa kur.
+                if (blocks == null) Build();
             }
         }
+
+        if (blocks == null || builtBars != bars || builtSegments != segments)
+            Build();
 
         float[] spec = GetSpectrum();
 
