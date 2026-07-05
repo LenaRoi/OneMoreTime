@@ -212,8 +212,11 @@ public class PlayerMovement : MonoBehaviour
         controller.enabled = false;
 
         transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0,0,0));
-        cameraHolderController.transform.GetChild(0).SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0, 0, 0));
-        cameraHolderController.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0, 0, 0));
+
+        // Kamerayı origin'e SNAP etme; doğru poza (playerHead + sıfır bakış) yerleştir.
+        // Böylece deadloop sonrası kamera zıplaması (origin'den kafaya lerp) olmaz.
+        // Bulanıklık artık burada değil, CameraRewind tarafından rewind bitmeden ~0.5sn önce tetikleniyor.
+        cameraHolderController.ResetView();
 
         velocity = Vector3.zero;
 

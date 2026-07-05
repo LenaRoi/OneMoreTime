@@ -102,6 +102,28 @@ public class CameraHolderController : MonoBehaviour
         transform.Rotate(Vector3.up * mouseX);
     }
 
+    /// <summary>
+    /// Deadloop sonrası kamerayı DOĞRU poza anında yerleştirir: holder'ı takip
+    /// hedefiyle (playerHead) birebir aynı yere, bakış açılarını (yaw/pitch) sıfıra.
+    /// Böylece isResetting kapanınca LateUpdate lerp'i sıfır hareket eder (origin'den
+    /// kafaya zıplama olmaz) ve eski pitch geri gelmez. Origin'e snap YERİNE bunu kullan.
+    /// </summary>
+    public void ResetView()
+    {
+        xRotation = 0f;
+        yRotation = 0f;
+
+        // Kamera (holder'ın içindeki) yerel pozunu sıfırla — rewind sırasında world
+        // pozu yazıldığı için yerel pozu bozulmuş olabilir.
+        if (childCamera != null)
+            childCamera.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+        // Holder parented değil; world pozunu doğrudan takip hedefine eşitle.
+        if (playerHead != null)
+            transform.position = playerHead.transform.position;
+        transform.rotation = Quaternion.Euler(0f, movement.transform.eulerAngles.y, 0f);
+    }
+
     public void GetInHead()
     {
         transform.SetParent(playerHead.transform);
