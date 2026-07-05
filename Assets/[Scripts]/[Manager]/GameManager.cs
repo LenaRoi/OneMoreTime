@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -34,6 +35,8 @@ public class GameManager : MonoBehaviour
     public List<Obstacle> allObstacles;
 
     public GameEndArea endArea;
+    public bool isPaused = false;
+    public GameObject pausePanel;
 
     private void Update()
     {
@@ -46,6 +49,26 @@ public class GameManager : MonoBehaviour
                 score = 0;
                 ResetGame();
             }
+        }
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (isPaused)
+            {
+                pausePanel.gameObject.SetActive(false);
+                Time.timeScale = 1;
+            }
+            else
+            {
+                pausePanel.gameObject.SetActive(true);
+                Time.timeScale = 0;
+            }
+            isPaused = !isPaused;
+        }
+
+        if (Input.GetKeyDown(KeyCode.P))
+        {
+            SceneManager.LoadScene(0);
         }
     }
 
