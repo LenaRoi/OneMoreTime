@@ -49,10 +49,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bcf862659b399944f9e7ffa2e772cbc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  fakeObstacle: 0
   index: 4
   key: 32
   entryPos: {fileID: 522123617428473035}
   exitPos: {fileID: 6794241801952208181}
+  buttonIndex: 0
+  immune: 1
 --- !u!65 &4524397373760892107
 BoxCollider:
   m_ObjectHideFlags: 0

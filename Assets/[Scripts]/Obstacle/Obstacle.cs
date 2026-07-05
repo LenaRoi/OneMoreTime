@@ -12,8 +12,13 @@ public class Obstacle : MonoBehaviour
 
     public int buttonIndex;
 
+    public bool immune = false;
+
     private void Start()
     {
-        GameManager.instance.allObstacles.Add(this);
+        if (!immune)
+        {
+            GameManager.instance.allObstacles.Add(this);
+        }
     }
 }
