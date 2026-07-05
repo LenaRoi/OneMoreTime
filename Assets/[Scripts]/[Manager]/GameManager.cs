@@ -31,6 +31,8 @@ public class GameManager : MonoBehaviour
     public List<ButtonOpener> buttonOpeners;
     public List<Obstacle> allObstacles;
 
+    public GameEndArea endArea;
+
     private void Update()
     {
         if (!isResetting && !gameOver)
@@ -112,5 +114,6 @@ public class GameManager : MonoBehaviour
     {
         gameOver = true;
         score = 1;
+        playerMovement.GetHead();
     }
 }

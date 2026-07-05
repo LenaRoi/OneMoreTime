@@ -41,13 +41,33 @@ public class CameraHolderController : MonoBehaviour
     {
         if (!GameManager.instance.isResetting)
         {
-            Vector3 targetPosition = playerHead.transform.position;
+            if (GameManager.instance.gameOver)
+            {
+                Vector3 targetPosition = GameManager.instance.endArea.camTarget.transform.position;
 
-            transform.position = Vector3.Lerp(
-                transform.position,
-                targetPosition,
-                100 * Time.deltaTime
-            );
+                transform.position = Vector3.Lerp(
+                    transform.position,
+                    targetPosition,
+                    5f * Time.deltaTime
+                );
+
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    GameManager.instance.endArea.camTarget.transform.rotation,
+                    5f * Time.deltaTime
+                );
+            }
+            else
+            {
+                Vector3 targetPosition = playerHead.transform.position;
+
+                transform.position = Vector3.Lerp(
+                    transform.position,
+                    targetPosition,
+                    100 * Time.deltaTime
+                );
+            }
+            
         }
     }
 

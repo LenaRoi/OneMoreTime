@@ -1417,6 +1417,9 @@ MonoBehaviour:
   targetObstacle: {fileID: 0}
   obstacleIndex: 0
   animator: {fileID: 6725114780226529461}
+  bodysmr: {fileID: 2407538447539653427}
+  headsmr: {fileID: 2923250230851775357}
+  targetDoor: {fileID: 0}
 --- !u!54 &5627000858224559884
 Rigidbody:
   m_ObjectHideFlags: 0

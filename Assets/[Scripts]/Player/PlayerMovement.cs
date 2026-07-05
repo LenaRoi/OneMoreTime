@@ -2,6 +2,7 @@ using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
@@ -31,6 +32,7 @@ public class PlayerMovement : MonoBehaviour
     
 
     public SkinnedMeshRenderer bodysmr;
+    public SkinnedMeshRenderer headsmr;
 
     public Door targetDoor;
 
@@ -100,6 +102,7 @@ public class PlayerMovement : MonoBehaviour
         Obstacle currentObstacle = targetObstacle;
         obstacleIndex = currentObstacle.index;
 
+        if(!currentObstacle.immune)
         currentObstacle.GetComponent<Collider>().enabled = false;
 
         if (!currentObstacle.fakeObstacle)
@@ -235,5 +238,10 @@ public class PlayerMovement : MonoBehaviour
         controller.enabled = true;
         canMove = true;
         canLook = true;
+    }
+
+    public void GetHead()
+    {
+        headsmr.shadowCastingMode = ShadowCastingMode.On;
     }
 }
